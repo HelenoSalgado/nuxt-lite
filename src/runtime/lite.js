@@ -1,321 +1,238 @@
 /**
- * nuxt-lite — Global SPA hydration controller
+ * nuxt-lite — SPA navigation with native prefetch
+ *
+ * Prefetch strategy:
+ * - Injects <link rel="prefetch" as="document"> on hover
+ * - Browser manages priority, cache, and concurrency natively
+ * - Respects Save-Data and Data-Saver automatically
+ *
+ * Navigation:
+ * - Fetches HTML via fetch() only on click (if not already prefetched)
+ * - Uses browser cache when available (prefetch populates HTTP cache)
+ * - Swaps content via innerHTML (no DOM node theft)
  */
-
 (function() {
-  'use strict'
+  'use strict';
 
-  if (window.__NUXT_LITE_RUNNING__) return
-  window.__NUXT_LITE_RUNNING__ = true
+  if (window.__NUXT_LITE_RUNNING__) {
+    return;
+  }
+  window.__NUXT_LITE_RUNNING__ = true;
 
-  // ===== Reactive System =====
-  const subs = new Map()
+  var subs = new Map();
+  var transitionMs = 0;
+  var navigating = false;
+  var hoverTimeout;
+  var prefetchLinks = new Set();
+
   function reactive(obj) {
     return new Proxy(obj, {
-      set(t, p, v) {
-        const o = t[p]; t[p] = v
-        if (o !== v) notify(p, v, o)
-        return true
+      set: function(t, p, v) {
+        var o = t[p];
+        t[p] = v;
+        if (o !== v) {
+          var arr = subs.get(p);
+          if (arr) {
+            arr.forEach(function(fn) { fn(v, o); });
+          }
+          var star = subs.get('*');
+          if (star) {
+            star.forEach(function(fn) { fn(v, o); });
+          }
+        }
+        return true;
       }
-    })
+    });
   }
+
   function on(prop, fn) {
-    if (!subs.has(prop)) subs.set(prop, new Set())
-    subs.get(prop).add(fn)
-    return () => subs.get(prop)?.delete(fn)
-  }
-  function notify(prop, nv, ov) {
-    for (const fn of subs.get(prop) || []) fn(nv, ov)
-    for (const fn of subs.get('*') || []) fn(nv, ov)
-  }
-
-  // ===== State =====
-  const state = reactive({ page: location.pathname, data: null })
-  window.__NUXT_LITE_STATE__ = state
-  window.__NuxtLite = { reactive, on }
-
-  // ===== Caches =====
-  const htmlCache = new Map()
-  const payloadCache = new Map()
-  const visitedRoutes = new Set()
-  const prefetching = new Set()
-
-  // ===== Normalize path =====
-  function normalizePath(path) {
-    return path.replace(/\/index$/, '').replace(/\/+$/, '') || '/'
+    if (!subs.has(prop)) {
+      subs.set(prop, new Set());
+    }
+    subs.get(prop).add(fn);
+    return function() {
+      var s = subs.get(prop);
+      if (s) s.delete(fn);
+    };
   }
 
-  // ===== Check if route is a Nuxt page =====
+  var state = reactive({ page: location.pathname });
+  window.__NUXT_LITE_STATE__ = state;
+  window.__NuxtLite = { reactive: reactive, on: on };
+
+  function normalizeHref(href) {
+    return href.split('?')[0].replace(/\/index$/, '').replace(/\/+$/, '') || '/';
+  }
+
   function isNuxtPage(href) {
-    // Skip static files, API routes, _nuxt assets
-    if (!href || !href.startsWith('/')) return false
-    if (href.startsWith('/_nuxt') || href.startsWith('/__')) return false
-    if (/\.(pdf|jpg|jpeg|png|gif|webp|svg|mp4|webm|mp3|ogg|zip|gz|css|js)(\?.*)?$/i.test(href)) return false
-    return true
+    if (!href || href[0] !== '/') return false;
+    if (href.startsWith('/_nuxt') || href.startsWith('/__')) return false;
+    if (/\.(pdf|jpg|jpeg|png|gif|webp|svg|mp4|webm|mp3|ogg|zip|gz|css|js)(\?.*)?$/i.test(href)) return false;
+    return true;
   }
 
-  // ===== Parse Nuxt payload =====
-  function parsePayload(raw) {
-    if (!Array.isArray(raw) || raw.length === 0) return null
-    const entry = raw[0]
-    if (!entry || typeof entry.data !== 'number') return null
-    return resolveRefs(raw, entry.data, new Set())
+  function nativePrefetch(href) {
+    var key = normalizeHref(href);
+    if (prefetchLinks.has(key)) return;
+    prefetchLinks.add(key);
+    var link = document.createElement('link');
+    link.rel = 'prefetch';
+    link.as = 'document';
+    link.href = href;
+    document.head.appendChild(link);
   }
 
-  function resolveRefs(raw, idx, visited) {
-    if (typeof idx === 'number') {
-      if (visited.has(idx)) return '[circular]'
-      visited.add(idx)
-      return resolveRefs(raw, raw[idx], visited)
-    }
-    if (Array.isArray(idx)) {
-      if (idx[0] === 'ShallowReactive' || idx[0] === 'Reactive' || idx[0] === 'Ref') {
-        return resolveRefs(raw, idx[1], visited)
-      }
-      return idx.map(item => resolveRefs(raw, item, new Set(visited)))
-    }
-    if (idx && typeof idx === 'object') {
-      const out = {}
-      for (const [k, v] of Object.entries(idx)) {
-        out[k] = resolveRefs(raw, v, new Set(visited))
-      }
-      return out
-    }
-    return idx
-  }
-
-  // ===== Fetch HTML =====
   async function fetchHTML(href) {
-    const key = normalizePath(new URL(href, location.origin).pathname)
-    if (htmlCache.has(key)) return htmlCache.get(key)
-
     try {
-      const res = await fetch(href, { headers: { Accept: 'text/html' } })
-      if (!res.ok) return null
-      const text = await res.text()
-      const doc = new DOMParser().parseFromString(text, 'text/html')
-      htmlCache.set(key, doc)
-      return doc
+      var res = await fetch(href, { headers: { Accept: 'text/html' } });
+      if (!res.ok) return null;
+      return await res.text();
     } catch (e) {
-      return null
+      console.error('[nuxt-lite] fetch error:', e);
+      return null;
     }
   }
 
-  // ===== Fetch payload =====
-  async function fetchPayload(route) {
-    const key = normalizePath(route)
-    if (payloadCache.has(key)) return payloadCache.get(key)
+  function swapContent(rawHtml) {
+    var doc = new DOMParser().parseFromString(rawHtml, 'text/html');
+    var newContent = doc.querySelector('[data-page-content]') || doc.querySelector('main');
+    if (!newContent) return false;
+    var contentEl = document.querySelector('[data-page-content]') || document.querySelector('main');
+    if (!contentEl) return false;
+    contentEl.innerHTML = newContent.innerHTML;
+    return true;
+  }
 
-    try {
-      const url = key === '/' ? '/_payload.json' : `${key}/_payload.json`
-      const res = await fetch(url, { cache: 'force-cache' })
-      if (!res.ok) return null
-      const raw = await res.json()
-      const data = parsePayload(raw)
-      if (data) payloadCache.set(key, data)
-      return data
-    } catch (e) {
-      return null
+  function updateMeta(rawHtml) {
+    var doc = new DOMParser().parseFromString(rawHtml, 'text/html');
+    if (doc.title) {
+      document.title = doc.title;
     }
-  }
-
-  // ===== Prefetch (only Nuxt pages) =====
-  function prefetch(href) {
-    if (!isNuxtPage(href)) return
-    
-    const key = normalizePath(new URL(href, location.origin).pathname)
-    if (prefetching.has(key)) return
-    prefetching.add(key)
-
-    Promise.all([fetchHTML(href), fetchPayload(key)])
-      .finally(() => prefetching.delete(key))
-  }
-
-  // ===== Swap content =====
-  function swapContentFromDoc(newDoc) {
-    const oldContent = document.querySelector('[data-page-content]') || document.querySelector('main')
-    const newContent = newDoc.querySelector('[data-page-content]') || newDoc.querySelector('main')
-    if (!oldContent || !newContent) return false
-
-    while (oldContent.firstChild) oldContent.removeChild(oldContent.firstChild)
-    for (const child of newContent.childNodes) {
-      oldContent.appendChild(document.importNode(child, true))
+    var nd = doc.querySelector('meta[name="description"]');
+    var od = document.querySelector('meta[name="description"]');
+    if (nd && nd.content && od) {
+      od.content = nd.content;
     }
-    return true
+    var nc = doc.querySelector('link[rel="canonical"]');
+    var oc = document.querySelector('link[rel="canonical"]');
+    if (nc && nc.href && oc) {
+      oc.href = nc.href;
+    }
+    var metaTags = doc.querySelectorAll('meta');
+    metaTags.forEach(function(meta) {
+      var name = meta.getAttribute('name');
+      var property = meta.getAttribute('property');
+      var content = meta.getAttribute('content');
+      if (content) {
+        var target;
+        if (name) {
+          target = document.querySelector('meta[name="' + name + '"]');
+        } else if (property) {
+          target = document.querySelector('meta[property="' + property + '"]');
+        }
+        if (target) {
+          target.setAttribute('content', content);
+        }
+      }
+    });
   }
-
-  function updateMetaFromDoc(newDoc) {
-    if (newDoc.title) document.title = newDoc.title
-    const newDesc = newDoc.querySelector('meta[name="description"]')
-    const oldDesc = document.querySelector('meta[name="description"]')
-    if (newDesc?.content && oldDesc) oldDesc.content = newDesc.content
-    const newCanonical = newDoc.querySelector('link[rel="canonical"]')
-    const oldCanonical = document.querySelector('link[rel="canonical"]')
-    if (newCanonical?.href && oldCanonical) oldCanonical.href = newCanonical.href
-  }
-
-  // ===== Navigate =====
-  let navigating = false
 
   function getTransitionMs() {
-    const el = document.querySelector('.page-enter-active, .page-leave-active')
-    if (!el) return 400
-    const style = getComputedStyle(el)
-    const dur = style.transitionDuration
-    if (!dur) return 400
-    const ms = parseFloat(dur)
-    return dur.includes('ms') ? ms : ms * 1000
+    if (transitionMs > 0) return transitionMs;
+    var el = document.querySelector('.page-enter-active, .page-leave-active');
+    if (!el) {
+      transitionMs = 400;
+      return 400;
+    }
+    var dur = getComputedStyle(el).transitionDuration;
+    if (!dur) {
+      transitionMs = 400;
+      return 400;
+    }
+    var ms = Number.parseFloat(dur);
+    transitionMs = dur.includes('ms') ? ms : ms * 1000;
+    return transitionMs;
   }
 
-  async function navigate(href, updateHistory = true) {
-    if (navigating) return
-    navigating = true
-
-    const contentEl = document.querySelector('[data-page-content]') || document.querySelector('main')
-    if (!contentEl) {
-      window.location.href = href
-      navigating = false
-      return
+  async function navigate(href, updateHistory) {
+    if (updateHistory === undefined) updateHistory = true;
+    if (navigating) return;
+    navigating = true;
+    var contentEl = document.querySelector('[data-page-content]') || document.querySelector('main');
+    if (!contentEl || !isNuxtPage(href)) {
+      window.location.href = href;
+      navigating = false;
+      return;
     }
-
-    // Non-Nuxt pages: hard navigation
-    if (!isNuxtPage(href)) {
-      window.location.href = href
-      navigating = false
-      return
-    }
-
     try {
-      const transitionMs = getTransitionMs()
-      const targetKey = normalizePath(href)
-      const isFirstVisit = !visitedRoutes.has(targetKey)
-
-      // Leave
-      contentEl.classList.add('page-leave-active', 'page-leave-from')
-      contentEl.offsetHeight
-      contentEl.classList.remove('page-leave-from')
-      contentEl.classList.add('page-leave-to')
-
-      let doc = null
-      let payload = null
-
-      if (isFirstVisit) {
-        const [htmlResult, payloadResult] = await Promise.allSettled([
-          fetchHTML(href),
-          fetchPayload(href)
-        ])
-        if (htmlResult.status === 'fulfilled' && htmlResult.value) {
-          doc = htmlResult.value
-          visitedRoutes.add(targetKey)
-        }
-        if (payloadResult.status === 'fulfilled' && payloadResult.value) {
-          payload = payloadResult.value
-        }
-      } else {
-        doc = htmlCache.get(targetKey)
-        payload = payloadCache.get(targetKey) || await fetchPayload(href)
+      var ms = getTransitionMs();
+      contentEl.classList.add('page-leave-active', 'page-leave-from');
+      void contentEl.offsetHeight;
+      contentEl.classList.remove('page-leave-from');
+      contentEl.classList.add('page-leave-to');
+      var rawHtml = await fetchHTML(href);
+      await new Promise(function(r) { setTimeout(r, ms); });
+      if (!rawHtml) {
+        contentEl.classList.remove('page-leave-active', 'page-leave-from', 'page-leave-to');
+        if (updateHistory) window.location.href = href;
+        navigating = false;
+        return;
       }
-
-      await new Promise(r => setTimeout(r, transitionMs))
-
-      if (!doc) {
-        if (updateHistory) window.location.href = href
-        navigating = false
-        contentEl.classList.remove('page-leave-active', 'page-leave-from', 'page-leave-to')
-        return
+      var swapped = swapContent(rawHtml);
+      if (!swapped) {
+        contentEl.classList.remove('page-leave-active', 'page-leave-from', 'page-leave-to');
+        if (updateHistory) window.location.href = href;
+        navigating = false;
+        return;
       }
-
-      swapContentFromDoc(doc)
-      updateMetaFromDoc(doc)
-
-      if (payload) {
-        state.data = payload
-        notify('data', payload, state.data)
-      }
-      state.page = targetKey
-      if (updateHistory) history.pushState({}, '', href)
-
-      // Enter
-      contentEl.classList.remove('page-leave-active', 'page-leave-from', 'page-leave-to')
-      contentEl.classList.add('page-enter-active', 'page-enter-from')
-      contentEl.offsetHeight
-      contentEl.classList.remove('page-enter-from')
-      contentEl.classList.add('page-enter-to')
-
-      await new Promise(r => setTimeout(r, transitionMs))
-      contentEl.classList.remove('page-enter-active', 'page-enter-from', 'page-enter-to')
-      window.scrollTo({ top: 0, behavior: 'instant' })
-
-      schedulePrefetch()
-
+      updateMeta(rawHtml);
+      state.page = normalizeHref(href);
+      if (updateHistory) history.pushState({}, '', href);
+      contentEl.classList.remove('page-leave-active', 'page-leave-from', 'page-leave-to');
+      contentEl.classList.add('page-enter-active', 'page-enter-from');
+      void contentEl.offsetHeight;
+      contentEl.classList.remove('page-enter-from');
+      contentEl.classList.add('page-enter-to');
+      await new Promise(function(r) { setTimeout(r, ms); });
+      contentEl.classList.remove('page-enter-active', 'page-enter-from', 'page-enter-to');
+      window.scrollTo({ top: 0, behavior: 'instant' });
     } catch (err) {
-      console.error('[nuxt-lite] Nav error:', err)
-      window.location.href = href
+      console.error('[nuxt-lite] navigate error:', err);
+      window.location.href = href;
     }
-
-    navigating = false
+    navigating = false;
   }
 
-  // ===== Intersection Observer =====
-  let observer = null
-  function schedulePrefetch() {
-    if (observer) observer.disconnect()
-    observer = new IntersectionObserver((entries) => {
-      for (const entry of entries) {
-        if (entry.isIntersecting) {
-          const href = entry.target.getAttribute('href')
-          if (href && isNuxtPage(href)) {
-            prefetch(href)
-          }
-          observer.unobserve(entry.target)
-        }
-      }
-    }, { rootMargin: '200px' })
+  document.addEventListener('mouseover', function(e) {
+    var link = e.target.closest('a[href]');
+    if (!link) return;
+    var href = link.getAttribute('href');
+    if (!isNuxtPage(href) || link.target === '_blank') return;
+    clearTimeout(hoverTimeout);
+    hoverTimeout = setTimeout(function() {
+      nativePrefetch(href);
+    }, 100);
+  }, { passive: true });
 
-    document.querySelectorAll('a[href^="/"]:not([href^="/_"]):not([href^="/__"])')
-      .forEach(link => observer.observe(link))
-  }
+  document.addEventListener('mouseout', function(e) {
+    if (e.target.closest('a[href]')) {
+      clearTimeout(hoverTimeout);
+    }
+  }, { passive: true });
 
-  // ===== Hover =====
-  let hoverTimeout
-  document.addEventListener('mouseover', (e) => {
-    const link = e.target.closest('a[href]')
-    if (!link) return
-    const href = link.getAttribute('href')
-    if (!isNuxtPage(href)) return
-    if (link.target === '_blank') return
-    clearTimeout(hoverTimeout)
-    hoverTimeout = setTimeout(() => prefetch(href), 80)
-  }, { passive: true })
+  document.addEventListener('click', function(e) {
+    var link = e.target.closest('a[href]');
+    if (!link) return;
+    var href = link.getAttribute('href');
+    if (!href || href[0] !== '/' || href.startsWith('/_nuxt') || href.startsWith('/__')) return;
+    if (e.ctrlKey || e.metaKey || e.button !== 0) return;
+    if (link.target === '_blank' || link.target === '_parent' || link.target === '_top') return;
+    e.preventDefault();
+    navigate(href);
+  }, { passive: false });
 
-  document.addEventListener('mouseout', (e) => {
-    if (e.target.closest('a[href]')) clearTimeout(hoverTimeout)
-  }, { passive: true })
+  window.addEventListener('popstate', function() {
+    navigate(window.location.pathname, false);
+  });
 
-  // ===== Click =====
-  document.addEventListener('click', (e) => {
-    const link = e.target.closest('a[href]')
-    if (!link) return
-    const href = link.getAttribute('href')
-    if (!href || !href.startsWith('/') || href.startsWith('/_nuxt') || href.startsWith('/__')) return
-    if (e.ctrlKey || e.metaKey || e.button !== 0) return
-    if (link.target === '_blank' || link.target === '_parent') return
-    e.preventDefault()
-    navigate(href)
-  }, { passive: false })
-
-  // ===== Popstate =====
-  window.addEventListener('popstate', () => navigate(window.location.pathname, false))
-
-  // ===== Initial =====
-  async function hydrateIfNotIndex() {
-    const path = normalizePath(location.pathname)
-    if (path === '/') return
-    const data = await fetchPayload(path)
-    if (data) state.data = data
-  }
-
-  schedulePrefetch()
-  hydrateIfNotIndex()
-
-})()
+})();

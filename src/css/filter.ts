@@ -20,8 +20,8 @@ export function filterCssBySelectors(
       const innerSel = parts.slice(2).join('|')
       if (innerSel && selectorMatches(innerSel, used)) {
         if (!keptMedia.has(atRule)) keptMedia.set(atRule, new Set())
-        const innerBlock = block.replace(/^.*?\{/, '')
-        keptMedia.get(atRule)!.add(innerBlock)
+        // Keep the full rule block (selector + declarations) as-is
+        keptMedia.get(atRule)!.add(block)
       }
       continue
     }

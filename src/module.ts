@@ -15,10 +15,6 @@ export default defineNuxtModule<ModuleOptions>({
   defaults: {
     optimizeCss: false,
     inlineStyles: false,
-    cleanHtml: true,
-    payloadExtraction: true,
-    hydration: true,
-    prefetchRoutes: true,
   },
   setup(options, nuxt) {
     const resolver = createResolver(import.meta.url)

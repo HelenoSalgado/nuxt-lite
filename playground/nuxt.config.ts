@@ -3,10 +3,8 @@ export default defineNuxtConfig({
   devtools: { enabled: true },
   compatibilityDate: 'latest',
   nuxtLite: {
+    optimizeCss: 'inline',
     cleanHtml: true,
-    payloadExtraction: true,
-    hydration: true,
-    prefetchRoutes: true
   },
   dir: {
     pages: 'pages'

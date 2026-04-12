@@ -1,4 +1,4 @@
-import { CSS_LINK_RE, STYLE_TAG_RE, VUE_RUNTIME_RE, MODULEPRELOAD_RE, PREFETCH_RE, NUXT_DATA_RE } from '../types'
+import { CSS_LINK_RE, STYLE_TAG_RE, VUE_RUNTIME_RE, MODULEPRELOAD_RE, PREFETCH_RE, NUXT_DATA_RE, NUXT_CONFIG_RE, TELEPORTS_RE } from '../types'
 
 /** Remove stylesheet links and existing <style> tags */
 export function stripExistingCss(html: string): string {
@@ -13,13 +13,45 @@ export function stripVueRuntime(html: string): string {
     .replace(PREFETCH_RE, '')
 }
 
-/** Extract __NUXT_DATA__ payload content from HTML */
-export function extractPayload(html: string): string | null {
-  const match = html.match(NUXT_DATA_RE)
-  return match?.[1] ?? null
-}
+/** Remove Nuxt artifacts from HTML */
+export function stripNuxtScripts(html: string): string {
+  let result = html
+    .replace(NUXT_DATA_RE, '')
+    .replace(NUXT_CONFIG_RE, '')
+    .replace(TELEPORTS_RE, '')
+    .replace(/<script>window\.__NUXT__=[\s\S]*?<\/script>\s*/g, '')
 
-/** Remove __NUXT_DATA__ script from HTML after extraction */
-export function stripPayload(html: string): string {
-  return html.replace(NUXT_DATA_RE, '')
+  // Unwrap <div id="__nuxt"> — find its opening and matching closing tag
+  const startIdx = result.search(/<div[^>]*id=["']?__nuxt["']?[^>]*>/)
+  if (startIdx !== -1) {
+    const openMatch = result.match(/<div[^>]*id=["']?__nuxt["']?[^>]*>/)
+    if (openMatch) {
+      const openTagEnd = startIdx + (openMatch?.[0]?.length || 0)
+      // Count divs to find matching close
+      let depth = 1
+      let pos = openTagEnd
+      while (depth > 0 && pos < result.length) {
+        const nextOpen = result.indexOf('<div', pos)
+        const nextClose = result.indexOf('</div>', pos)
+        if (nextClose === -1) break
+        if (nextOpen !== -1 && nextOpen < nextClose) {
+          depth++
+          pos = nextOpen + 4
+        } else {
+          depth--
+          if (depth === 0) {
+            // Found matching close tag
+            const before = result.slice(0, startIdx)
+            const inner = result.slice(openTagEnd, nextClose)
+            const after = result.slice(nextClose + 6).trimStart()
+            result = before + inner + after
+          } else {
+            pos = nextClose + 6
+          }
+        }
+      }
+    }
+  }
+
+  return result
 }
