@@ -1,14 +1,15 @@
 /**
- * nuxt-lite runtime — hydration + SPA navigation
- * Zero Vue dependency — ~4KB
+ * nuxt-lite — Global SPA hydration controller
  */
 
 (function() {
   'use strict'
 
+  if (window.__NUXT_LITE_RUNNING__) return
+  window.__NUXT_LITE_RUNNING__ = true
+
   // ===== Reactive System =====
   const subs = new Map()
-
   function reactive(obj) {
     return new Proxy(obj, {
       set(t, p, v) {
@@ -18,218 +19,303 @@
       }
     })
   }
-
   function on(prop, fn) {
     if (!subs.has(prop)) subs.set(prop, new Set())
     subs.get(prop).add(fn)
     return () => subs.get(prop)?.delete(fn)
   }
-
   function notify(prop, nv, ov) {
     for (const fn of subs.get(prop) || []) fn(nv, ov)
     for (const fn of subs.get('*') || []) fn(nv, ov)
   }
 
   // ===== State =====
-  const state = reactive({ page: location.pathname })
+  const state = reactive({ page: location.pathname, data: null })
   window.__NUXT_LITE_STATE__ = state
   window.__NuxtLite = { reactive, on }
 
-  // ===== Navigation =====
-  let busy = false
+  // ===== Caches =====
+  const htmlCache = new Map()
+  const payloadCache = new Map()
+  const visitedRoutes = new Set()
+  const prefetching = new Set()
 
-  /**
-   * Get transition duration from CSS classes configured in the project.
-   * Reads computed transition from .page-leave-active or falls back to default.
-   */
-  function getTransitionDuration() {
-    // Try to read from the configured .page-leave-active or .page-enter-active
-    const styleEl = document.querySelector('.page-leave-active, .page-enter-active')
-    if (styleEl) {
-      const computed = getComputedStyle(styleEl)
-      const duration = computed.transitionDuration
-      if (duration) {
-        // Parse "0.4s" or "400ms" → ms
-        const val = parseFloat(duration)
-        if (duration.includes('ms')) return val
-        if (duration.includes('s')) return val * 1000
-      }
+  // ===== Normalize path =====
+  function normalizePath(path) {
+    return path.replace(/\/index$/, '').replace(/\/+$/, '') || '/'
+  }
+
+  // ===== Check if route is a Nuxt page =====
+  function isNuxtPage(href) {
+    // Skip static files, API routes, _nuxt assets
+    if (!href || !href.startsWith('/')) return false
+    if (href.startsWith('/_nuxt') || href.startsWith('/__')) return false
+    if (/\.(pdf|jpg|jpeg|png|gif|webp|svg|mp4|webm|mp3|ogg|zip|gz|css|js)(\?.*)?$/i.test(href)) return false
+    return true
+  }
+
+  // ===== Parse Nuxt payload =====
+  function parsePayload(raw) {
+    if (!Array.isArray(raw) || raw.length === 0) return null
+    const entry = raw[0]
+    if (!entry || typeof entry.data !== 'number') return null
+    return resolveRefs(raw, entry.data, new Set())
+  }
+
+  function resolveRefs(raw, idx, visited) {
+    if (typeof idx === 'number') {
+      if (visited.has(idx)) return '[circular]'
+      visited.add(idx)
+      return resolveRefs(raw, raw[idx], visited)
     }
-    return 400 // default fallback
-  }
-
-  /**
-   * Apply Nuxt page transition classes to an element.
-   * Respects the project's CSS transition configuration.
-   * 
-   * Nuxt transition classes work like this:
-   * - From state: *-from (initial state before transition)
-   * - To state: *-to (final state after transition)
-   * - Active: *-active (contains the transition CSS properties)
-   * 
-   * For 'out-in' mode: leave first, then enter.
-   */
-  function applyTransition(element, phase) {
-    // phase: 'leave' or 'enter'
-    if (phase === 'leave') {
-      // Start at leave-from (current visible state)
-      element.classList.add('page-leave-active')
-      element.classList.add('page-leave-from')
-      // Force reflow so the browser applies the -from state
-      element.offsetHeight
-      // Move to leave-to (triggers the CSS transition)
-      element.classList.remove('page-leave-from')
-      element.classList.add('page-leave-to')
-    } else {
-      // Start at enter-from (hidden state)
-      element.classList.add('page-enter-active')
-      element.classList.add('page-enter-from')
-      // Force reflow so the browser applies the -from state
-      element.offsetHeight
-      // Move to enter-to (triggers the CSS transition)
-      element.classList.remove('page-enter-from')
-      element.classList.add('page-enter-to')
-    }
-  }
-
-  /**
-   * Remove all Nuxt page transition classes from an element.
-   */
-  function clearTransition(element) {
-    element.classList.remove(
-      'page-enter-active', 'page-enter-from', 'page-enter-to',
-      'page-leave-active', 'page-leave-from', 'page-leave-to'
-    )
-  }
-
-  /**
-   * Wait for CSS transition to complete.
-   */
-  function waitForTransition(element, duration) {
-    return new Promise(resolve => {
-      const onEnd = () => {
-        element.removeEventListener('transitionend', onEnd)
-        clearTimeout(fallback)
-        resolve()
+    if (Array.isArray(idx)) {
+      if (idx[0] === 'ShallowReactive' || idx[0] === 'Reactive' || idx[0] === 'Ref') {
+        return resolveRefs(raw, idx[1], visited)
       }
-      element.addEventListener('transitionend', onEnd, { once: true })
-      // Fallback in case transitionend doesn't fire
-      const fallback = setTimeout(onEnd, duration + 50)
-    })
+      return idx.map(item => resolveRefs(raw, item, new Set(visited)))
+    }
+    if (idx && typeof idx === 'object') {
+      const out = {}
+      for (const [k, v] of Object.entries(idx)) {
+        out[k] = resolveRefs(raw, v, new Set(visited))
+      }
+      return out
+    }
+    return idx
   }
 
-  document.addEventListener('click', async (e) => {
-    const link = e.target.closest('a[href]')
-    if (!link) return
-
-    const href = link.getAttribute('href')
-    if (!href || !href.startsWith('/') || href.startsWith('/_') || href.startsWith('/api/')) return
-    if (e.ctrlKey || e.metaKey || e.button !== 0) return
-
-    const currentPath = window.location.pathname.replace(/\/$/, '')
-    const targetPath = href.replace(/\/$/, '')
-    if (targetPath === currentPath) return
-
-    e.preventDefault()
-    if (busy) return
-    busy = true
-
-    // Find main content area
-    const content = document.querySelector('[data-page-content]')
-      || document.getElementById('__nuxt')
-      || document.querySelector('main')
-
-    if (!content) { window.location.href = href; return }
+  // ===== Fetch HTML =====
+  async function fetchHTML(href) {
+    const key = normalizePath(new URL(href, location.origin).pathname)
+    if (htmlCache.has(key)) return htmlCache.get(key)
 
     try {
-      const duration = getTransitionDuration()
-
-      // Leave transition using Nuxt CSS classes
-      applyTransition(content, 'leave')
-      await waitForTransition(content, duration)
-
-      // Fetch new page HTML
       const res = await fetch(href, { headers: { Accept: 'text/html' } })
-      if (!res.ok) { window.location.href = href; return }
-
+      if (!res.ok) return null
       const text = await res.text()
-      const parser = new DOMParser()
-      const doc = parser.parseFromString(text, 'text/html')
+      const doc = new DOMParser().parseFromString(text, 'text/html')
+      htmlCache.set(key, doc)
+      return doc
+    } catch (e) {
+      return null
+    }
+  }
 
-      // Get new content
-      const newContent = doc.querySelector('[data-page-content]')
-        || doc.getElementById('__nuxt')
-        || doc.querySelector('main')
+  // ===== Fetch payload =====
+  async function fetchPayload(route) {
+    const key = normalizePath(route)
+    if (payloadCache.has(key)) return payloadCache.get(key)
 
-      if (newContent) {
-        content.innerHTML = newContent.innerHTML
-      }
+    try {
+      const url = key === '/' ? '/_payload.json' : `${key}/_payload.json`
+      const res = await fetch(url, { cache: 'force-cache' })
+      if (!res.ok) return null
+      const raw = await res.json()
+      const data = parsePayload(raw)
+      if (data) payloadCache.set(key, data)
+      return data
+    } catch (e) {
+      return null
+    }
+  }
 
-      // Clear leave transition classes after content swap
-      clearTransition(content)
+  // ===== Prefetch (only Nuxt pages) =====
+  function prefetch(href) {
+    if (!isNuxtPage(href)) return
+    
+    const key = normalizePath(new URL(href, location.origin).pathname)
+    if (prefetching.has(key)) return
+    prefetching.add(key)
 
-      // Update __NUXT_DATA__
-      const oldData = document.getElementById('__NUXT_DATA__')
-      const newData = doc.getElementById('__NUXT_DATA__')
-      if (oldData && newData) oldData.textContent = newData.textContent
+    Promise.all([fetchHTML(href), fetchPayload(key)])
+      .finally(() => prefetching.delete(key))
+  }
 
-      // Update head metadata
-      const newTitle = doc.querySelector('title')
-      if (newTitle) document.title = newTitle.textContent
+  // ===== Swap content =====
+  function swapContentFromDoc(newDoc) {
+    const oldContent = document.querySelector('[data-page-content]') || document.querySelector('main')
+    const newContent = newDoc.querySelector('[data-page-content]') || newDoc.querySelector('main')
+    if (!oldContent || !newContent) return false
 
-      for (const sel of ['meta[name="description"]', 'link[rel="canonical"]']) {
-        const oldEl = document.querySelector(sel)
-        const newEl = doc.querySelector(sel)
-        if (oldEl && newEl) {
-          if (oldEl.tagName === 'LINK') oldEl.setAttribute('href', newEl.getAttribute('href'))
-          else oldEl.setAttribute('content', newEl.getAttribute('content'))
-        }
-      }
+    while (oldContent.firstChild) oldContent.removeChild(oldContent.firstChild)
+    for (const child of newContent.childNodes) {
+      oldContent.appendChild(document.importNode(child, true))
+    }
+    return true
+  }
 
-      // Update URL
-      history.pushState({}, '', href)
-      state.page = href
+  function updateMetaFromDoc(newDoc) {
+    if (newDoc.title) document.title = newDoc.title
+    const newDesc = newDoc.querySelector('meta[name="description"]')
+    const oldDesc = document.querySelector('meta[name="description"]')
+    if (newDesc?.content && oldDesc) oldDesc.content = newDesc.content
+    const newCanonical = newDoc.querySelector('link[rel="canonical"]')
+    const oldCanonical = document.querySelector('link[rel="canonical"]')
+    if (newCanonical?.href && oldCanonical) oldCanonical.href = newCanonical.href
+  }
 
-      // Enter transition using Nuxt CSS classes
-      applyTransition(content, 'enter')
-      await waitForTransition(content, duration)
-      clearTransition(content)
+  // ===== Navigate =====
+  let navigating = false
 
-      // Scroll to top
-      window.scrollTo({ top: 0, behavior: 'smooth' })
+  function getTransitionMs() {
+    const el = document.querySelector('.page-enter-active, .page-leave-active')
+    if (!el) return 400
+    const style = getComputedStyle(el)
+    const dur = style.transitionDuration
+    if (!dur) return 400
+    const ms = parseFloat(dur)
+    return dur.includes('ms') ? ms : ms * 1000
+  }
 
-    } catch(err) {
-      console.warn('[nuxt-lite] Navigation failed:', err)
+  async function navigate(href, updateHistory = true) {
+    if (navigating) return
+    navigating = true
+
+    const contentEl = document.querySelector('[data-page-content]') || document.querySelector('main')
+    if (!contentEl) {
       window.location.href = href
+      navigating = false
       return
     }
 
-    busy = false
-    setupPrefetch()
-  })
+    // Non-Nuxt pages: hard navigation
+    if (!isNuxtPage(href)) {
+      window.location.href = href
+      navigating = false
+      return
+    }
 
-  // ===== Prefetch: only visible links =====
-  function setupPrefetch() {
-    const obs = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) {
-          const a = entry.target
-          // Only prefetch internal, non-current routes
-          if (a.hostname === location.hostname && a.pathname.replace(/\/$/, '') !== location.pathname.replace(/\/$/, '')) {
-            // Prefetch with low priority (don't block current navigation)
-            fetch(a.pathname, { priority: 'low' }).catch(() => {})
-          }
-          obs.unobserve(entry.target)
+    try {
+      const transitionMs = getTransitionMs()
+      const targetKey = normalizePath(href)
+      const isFirstVisit = !visitedRoutes.has(targetKey)
+
+      // Leave
+      contentEl.classList.add('page-leave-active', 'page-leave-from')
+      contentEl.offsetHeight
+      contentEl.classList.remove('page-leave-from')
+      contentEl.classList.add('page-leave-to')
+
+      let doc = null
+      let payload = null
+
+      if (isFirstVisit) {
+        const [htmlResult, payloadResult] = await Promise.allSettled([
+          fetchHTML(href),
+          fetchPayload(href)
+        ])
+        if (htmlResult.status === 'fulfilled' && htmlResult.value) {
+          doc = htmlResult.value
+          visitedRoutes.add(targetKey)
         }
-      })
-    }, {
-      rootMargin: '200px',  // Only prefetch links ~200px from viewport
-      threshold: 0
-    })
+        if (payloadResult.status === 'fulfilled' && payloadResult.value) {
+          payload = payloadResult.value
+        }
+      } else {
+        doc = htmlCache.get(targetKey)
+        payload = payloadCache.get(targetKey) || await fetchPayload(href)
+      }
 
-    document.querySelectorAll('a[href^="/"]').forEach(a => obs.observe(a))
+      await new Promise(r => setTimeout(r, transitionMs))
+
+      if (!doc) {
+        if (updateHistory) window.location.href = href
+        navigating = false
+        contentEl.classList.remove('page-leave-active', 'page-leave-from', 'page-leave-to')
+        return
+      }
+
+      swapContentFromDoc(doc)
+      updateMetaFromDoc(doc)
+
+      if (payload) {
+        state.data = payload
+        notify('data', payload, state.data)
+      }
+      state.page = targetKey
+      if (updateHistory) history.pushState({}, '', href)
+
+      // Enter
+      contentEl.classList.remove('page-leave-active', 'page-leave-from', 'page-leave-to')
+      contentEl.classList.add('page-enter-active', 'page-enter-from')
+      contentEl.offsetHeight
+      contentEl.classList.remove('page-enter-from')
+      contentEl.classList.add('page-enter-to')
+
+      await new Promise(r => setTimeout(r, transitionMs))
+      contentEl.classList.remove('page-enter-active', 'page-enter-from', 'page-enter-to')
+      window.scrollTo({ top: 0, behavior: 'instant' })
+
+      schedulePrefetch()
+
+    } catch (err) {
+      console.error('[nuxt-lite] Nav error:', err)
+      window.location.href = href
+    }
+
+    navigating = false
   }
 
-  setupPrefetch()
+  // ===== Intersection Observer =====
+  let observer = null
+  function schedulePrefetch() {
+    if (observer) observer.disconnect()
+    observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) {
+          const href = entry.target.getAttribute('href')
+          if (href && isNuxtPage(href)) {
+            prefetch(href)
+          }
+          observer.unobserve(entry.target)
+        }
+      }
+    }, { rootMargin: '200px' })
+
+    document.querySelectorAll('a[href^="/"]:not([href^="/_"]):not([href^="/__"])')
+      .forEach(link => observer.observe(link))
+  }
+
+  // ===== Hover =====
+  let hoverTimeout
+  document.addEventListener('mouseover', (e) => {
+    const link = e.target.closest('a[href]')
+    if (!link) return
+    const href = link.getAttribute('href')
+    if (!isNuxtPage(href)) return
+    if (link.target === '_blank') return
+    clearTimeout(hoverTimeout)
+    hoverTimeout = setTimeout(() => prefetch(href), 80)
+  }, { passive: true })
+
+  document.addEventListener('mouseout', (e) => {
+    if (e.target.closest('a[href]')) clearTimeout(hoverTimeout)
+  }, { passive: true })
+
+  // ===== Click =====
+  document.addEventListener('click', (e) => {
+    const link = e.target.closest('a[href]')
+    if (!link) return
+    const href = link.getAttribute('href')
+    if (!href || !href.startsWith('/') || href.startsWith('/_nuxt') || href.startsWith('/__')) return
+    if (e.ctrlKey || e.metaKey || e.button !== 0) return
+    if (link.target === '_blank' || link.target === '_parent') return
+    e.preventDefault()
+    navigate(href)
+  }, { passive: false })
+
+  // ===== Popstate =====
+  window.addEventListener('popstate', () => navigate(window.location.pathname, false))
+
+  // ===== Initial =====
+  async function hydrateIfNotIndex() {
+    const path = normalizePath(location.pathname)
+    if (path === '/') return
+    const data = await fetchPayload(path)
+    if (data) state.data = data
+  }
+
+  schedulePrefetch()
+  hydrateIfNotIndex()
 
 })()

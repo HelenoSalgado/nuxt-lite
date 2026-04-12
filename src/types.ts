@@ -25,6 +25,30 @@ export interface ModuleOptions {
    * @default ['data-v-', '__vue_ssr__', 'data-server-rendered']
    */
   stripAttributes?: string[]
+
+  /**
+   * Whether to clean HTML output (remove Nuxt/Vue artifacts).
+   * @default true
+   */
+  cleanHtml?: boolean
+
+  /**
+   * Whether to extract page payloads for client-side navigation.
+   * @default true
+   */
+  payloadExtraction?: boolean
+
+  /**
+   * Whether to enable lightweight hydration.
+   * @default true
+   */
+  hydration?: boolean
+
+  /**
+   * Whether to prefetch routes on link intersection or hover.
+   * @default true
+   */
+  prefetchRoutes?: boolean
 }
 
 // ============================================================================
@@ -64,6 +88,8 @@ export const ESSENTIAL_SELECTORS = Object.freeze([
   // Nuxt page transitions — required for SPA navigation
   'page-enter-active', 'page-enter-from', 'page-enter-to',
   'page-leave-active', 'page-leave-from', 'page-leave-to',
+  // JS-driven UI classes (not present in static HTML, added dynamically)
+  '.header-hidden', '.open',
 ]) as ReadonlyArray<string>
 
 // File patterns to exclude from CSS collection

@@ -24,8 +24,9 @@ export function collectAllCssFiles(rootDir: string): Map<string, string> {
 }
 
 /** Remove all .css files except the optimized output */
-export function removeRedundantCssFiles(rootDir: string, keepPath: string) {
+export function removeRedundantCssFiles(rootDir: string, keepPath: string): string[] {
   const keepRel = relative(rootDir, keepPath).replace(/\\/g, '/')
+  const removed: string[] = []
 
   function walk(dir: string) {
     if (!existsSync(dir)) return
@@ -38,10 +39,11 @@ export function removeRedundantCssFiles(rootDir: string, keepPath: string) {
       if (rel === keepRel) continue
       try {
         unlinkSync(full)
-        console.log(`[nuxt-lite] Removed redundant CSS: ${rel}`)
+        removed.push(rel)
       } catch { /* skip */ }
     }
   }
 
   walk(rootDir)
+  return removed
 }

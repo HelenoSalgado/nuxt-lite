@@ -8,10 +8,10 @@ export default defineNitroPlugin(async (nitroApp) => {
   // This server plugin can be used for additional runtime logic if needed.
   
   // Example: Add custom headers or modify responses
-  nitroApp.hooks.hook('render:response', async (response, event) => {
+  nitroApp.hooks.hook('render:response', async (response, { event }) => {
     // Add custom headers for caching
-    if (event.path?.endsWith('.html') || event.path === '/') {
-      response.headers.set('X-Nuxt-Lite', 'true')
+    if (response.headers && (event.path?.endsWith('.html') || event.path === '/')) {
+      response.headers['X-Nuxt-Lite'] = 'true'
     }
   })
 })

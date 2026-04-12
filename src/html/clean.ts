@@ -18,3 +18,8 @@ export function extractPayload(html: string): string | null {
   const match = html.match(NUXT_DATA_RE)
   return match?.[1] ?? null
 }
+
+/** Remove __NUXT_DATA__ script from HTML after extraction */
+export function stripPayload(html: string): string {
+  return html.replace(NUXT_DATA_RE, '')
+}

@@ -15,9 +15,18 @@ export default defineNuxtModule<ModuleOptions>({
   defaults: {
     optimizeCss: false,
     inlineStyles: false,
+    cleanHtml: true,
+    payloadExtraction: true,
+    hydration: true,
+    prefetchRoutes: true,
   },
   setup(options, nuxt) {
     const resolver = createResolver(import.meta.url)
+
+    // Only run nuxt-lite for production builds (nuxt generate)
+    if (nuxt.options.dev) {
+      return
+    }
 
     nuxt.hook('close', async () => {
       const outputDir = findOutputDir(nuxt)
@@ -30,11 +39,6 @@ export default defineNuxtModule<ModuleOptions>({
       const cssMode = resolveCssMode(options)
 
       const results = processAllHtml(outputDir, { ...options, _cssMode: cssMode }, runtimeSrc)
-      console.log(
-        `[nuxt-lite] Done — HTML: ${results.cleaned}`
-        + ` | Payloads: ${results.payloads}`
-        + ` | CSS optimized: ${results.cssOptimized}`,
-      )
     })
   },
 })

@@ -48,8 +48,14 @@ export default defineNuxtConfig({
 | `optimizeCss` | `false` | Otimização de CSS: `true`/`'inline'` para tree-shake por página, `'file'` para arquivo único |
 | `inlineStyles` | `false` | **Deprecated.** Use `optimizeCss` |
 | `stripAttributes` | `['data-v-', '__vue_ssr__', 'data-server-rendered']` | Atributos Vue SSR a remover do HTML |
+| `cleanHtml` | `true` | Se deve limpar o HTML (remover artefatos Nuxt/Vue do SSR) |
+| `payloadExtraction` | `true` | Se deve extrair payloads de página para navegação no cliente |
+| `hydration` | `true` | Se deve habilitar a hidratação leve e navegação SPA |
+| `prefetchRoutes` | `true` | Se deve fazer prefetch de rotas ao entrar no viewport ou hover |
 
-### `optimizeCss`
+### Detalhes das Opções
+
+#### `optimizeCss`
 
 | Modo | Comportamento |
 |---|---|
@@ -57,7 +63,24 @@ export default defineNuxtConfig({
 | `true` ou `'inline'` | Tree-shake CSS por página e injeta em `<style>` no `<head>` |
 | `'file'` | Tree-shake globalmente e gera `/css/optimized.css` com `<link rel="preload">` + `<link rel="stylesheet">` |
 
-#### Exemplo: CSS inline (recomendado para sites pequenos/médios)
+#### `stripAttributes`
+Lista de atributos que o Nuxt/Vue adiciona ao HTML durante o SSR e que não são mais necessários após a remoção do Vue runtime. Útil para reduzir o tamanho do HTML final.
+
+#### `cleanHtml`
+Quando ativado, remove tags `<script>` do bundle do Nuxt, links de `modulepreload` e `prefetch` que não são mais úteis para o runtime lite, garantindo um HTML limpo e focado em performance.
+
+#### `payloadExtraction`
+Extrai o conteúdo de `__NUXT_DATA__` de cada página HTML e o salva em um arquivo `payload.json` separado. Isso permite que a navegação SPA baixe apenas os dados necessários da próxima página em vez do HTML completo.
+
+#### `hydration`
+Ativa o sistema de hidratação e navegação SPA. Quando `false`, o site se comporta como um site estático puro (MPA), onde cada clique em link recarrega a página inteira.
+
+#### `prefetchRoutes`
+Habilita o `IntersectionObserver` que detecta links próximos ao viewport e inicia o prefetch do `payload.json` correspondente com baixa prioridade. Também ativa prefetch básico no hover para links.
+
+### Exemplos de Configuração
+
+#### CSS inline (recomendado para sites pequenos/médios)
 
 ```ts
 nuxtLite: {
@@ -65,17 +88,15 @@ nuxtLite: {
 }
 ```
 
-Cada página recebe apenas o CSS que usa, injetado diretamente no HTML — zero requests bloqueantes.
-
-#### Exemplo: Arquivo único (recomendado para sites grandes)
+#### SPA com Hidratação Desativada (MPA Puro)
 
 ```ts
 nuxtLite: {
-  optimizeCss: 'file',
+  hydration: false,
 }
 ```
 
-Gera um único `/css/optimized.css` com preload de alta prioridade. Ideal quando o CSS inline ficaria muito grande.
+Seu site funcionará sem JS no cliente, mas cada navegação será um recarregamento completo da página. Ideal para landing pages estáticas extremas.
 
 ## Como Funciona
 
