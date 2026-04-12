@@ -1,8 +1,11 @@
 import { defineNuxtModule, createResolver } from '@nuxt/kit'
-import { readFileSync } from 'node:fs'
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
+import { join } from 'node:path'
 import type { ModuleOptions } from './types'
 import { resolveCssMode, findOutputDir } from './types'
 import { processAllHtml } from './html/process'
+import { collectPagesByLayout } from './html/layout-detector'
+import { diffGroup } from './html/diff'
 
 export type { ModuleOptions } from './types'
 
@@ -34,7 +37,66 @@ export default defineNuxtModule<ModuleOptions>({
       const runtimeSrc = readFileSync(resolver.resolve('./runtime/lite.js'), 'utf-8')
       const cssMode = resolveCssMode(options)
 
+      // Phase 1: CSS optimization + HTML processing (existente)
       const results = processAllHtml(outputDir, { ...options, _cssMode: cssMode }, runtimeSrc)
+
+      // Phase 2: Detect layouts + diff pages + generate payloads
+      console.log('\n  ┌─ nuxt-lite: diff & payloads ──────')
+      const layoutGroups = collectPagesByLayout(outputDir)
+
+      const nlDir = join(outputDir, '_nuxt-lite')
+      mkdirSync(nlDir, { recursive: true })
+
+      const manifest: Record<string, { template: string; blocks: number }> = {}
+      let totalPayloads = 0
+      let totalBlocks = 0
+
+      for (const [layout, pages] of layoutGroups) {
+        if (pages.length === 0) continue
+
+        console.log(`  │  Layout "${layout}": ${pages.length} pages`)
+
+        const diffResult = diffGroup(pages)
+
+        if (diffResult.blockCount === 0) continue
+
+        // Salvar template
+        const templateName = layout.replace(/[^a-zA-Z0-9_-]/g, '_')
+        const templatePath = join(nlDir, `${templateName}.html`)
+        writeFileSync(templatePath, diffResult.templateHtml, 'utf-8')
+
+        // Salvar payloads
+        const payloadDir = join(nlDir, 'payloads')
+        mkdirSync(payloadDir, { recursive: true })
+
+        for (const [route, payload] of diffResult.payloads) {
+          const routeFile = route.replace(/^\//, '').replace(/\//g, '_') || 'index'
+          const payloadPath = join(payloadDir, `${routeFile}.json`)
+          writeFileSync(payloadPath, JSON.stringify(payload), 'utf-8')
+          totalPayloads++
+
+          manifest[route] = {
+            template: `${templateName}.html`,
+            blocks: diffResult.blockCount,
+          }
+        }
+
+        totalBlocks += diffResult.blockCount
+      }
+
+      // Salvar manifest
+      writeFileSync(
+        join(nlDir, 'manifest.json'),
+        JSON.stringify(manifest, null, 2),
+        'utf-8',
+      )
+
+      console.log(`  │`)
+      console.log(`  │  ✓ Groups:          ${layoutGroups.size}`)
+      console.log(`  │  ✓ Payloads:        ${totalPayloads}`)
+      console.log(`  │  ✓ Total blocks:    ${totalBlocks}`)
+      console.log(`  │  ✓ Manifest:        _nuxt-lite/manifest.json`)
+      console.log(`  └─────────────────────────────────────`)
     })
   },
 })

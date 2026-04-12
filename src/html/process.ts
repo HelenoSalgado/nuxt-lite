@@ -27,7 +27,7 @@ function extractInternalLinks(html: string): Set<string> {
     const fullTag = m[0]
     if (TARGET_RE.test(fullTag)) continue
     // Normalize: remove query string and trailing slash for dedup
-    const normalized = href.split('?')[0].replace(/\/index$/, '').replace(/\/+$/, '') || '/'
+    const normalized = (href.split('?')[0] || '').replace(/\/index$/, '').replace(/\/+$/, '') || '/'
     links.add(normalized)
   }
   return links
