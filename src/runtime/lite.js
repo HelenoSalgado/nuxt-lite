@@ -224,8 +224,10 @@
 
       if (targetInfo && currentTemplate === targetInfo.template) {
         // === MESMO TEMPLATE: fetch payload only ===
-        var payloadFile = targetRoute.replace(/^\//, '').replace(/\//g, '_') || 'index';
-        var payload = await fetchJSON('/_nuxt-lite/payloads/' + payloadFile + '.json');
+        var payloadUrl = targetRoute === '/'
+          ? '/_payload.json'
+          : targetRoute + '/_payload.json';
+        var payload = await fetchJSON(payloadUrl);
 
         await new Promise(function(r) { setTimeout(r, ms); });
 

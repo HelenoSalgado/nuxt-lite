@@ -65,13 +65,21 @@ export default defineNuxtModule<ModuleOptions>({
         const templatePath = join(nlDir, `${templateName}.html`)
         writeFileSync(templatePath, diffResult.templateHtml, 'utf-8')
 
-        // Salvar payloads
-        const payloadDir = join(nlDir, 'payloads')
-        mkdirSync(payloadDir, { recursive: true })
+        // Substituir o HTML de cada página pelo template com marcadores
+        // Assim o runtime encontra <!--NL:N--> no DOM
+        for (const page of pages) {
+          writeFileSync(page.htmlPath, diffResult.templateHtml, 'utf-8')
+        }
 
+        // Salvar payloads na estrutura de diretórios da rota
         for (const [route, payload] of diffResult.payloads) {
-          const routeFile = route.replace(/^\//, '').replace(/\//g, '_') || 'index'
-          const payloadPath = join(payloadDir, `${routeFile}.json`)
+          // Gerar payload NO CAMINHO DA ROTA, substituindo o _payload.json do Nuxt
+          // Ex: /manuscritos/despertar → dist/manuscritos/despertar/_payload.json
+          // Ex: / → dist/_payload.json
+          const routePath = route === '/' ? '' : route.replace(/^\//, '').replace(/\/$/, '')
+          const payloadDir = routePath ? join(outputDir, routePath) : outputDir
+          mkdirSync(payloadDir, { recursive: true })
+          const payloadPath = join(payloadDir, '_payload.json')
           writeFileSync(payloadPath, JSON.stringify(payload), 'utf-8')
           totalPayloads++
 
