@@ -1,11 +1,11 @@
 import { defineNuxtModule, createResolver } from '@nuxt/kit'
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
-import { join } from 'node:path'
+import { readFileSync, writeFileSync, mkdirSync, existsSync, cpSync, rmSync } from 'node:fs'
+import { join, dirname } from 'node:path'
 import type { ModuleOptions } from './types'
 import { resolveCssMode, findOutputDir } from './types'
 import { processAllHtml } from './html/process'
 import { collectPagesByLayout } from './html/layout-detector'
-import { diffGroup } from './html/diff'
+import { diffGroup, splitHtml } from './html/diff'
 
 export type { ModuleOptions } from './types'
 
@@ -22,7 +22,6 @@ export default defineNuxtModule<ModuleOptions>({
   setup(options, nuxt) {
     const resolver = createResolver(import.meta.url)
 
-    // Only run nuxt-lite for production builds (nuxt generate)
     if (nuxt.options.dev) {
       return
     }
@@ -38,7 +37,7 @@ export default defineNuxtModule<ModuleOptions>({
       const cssMode = resolveCssMode(options)
 
       // Phase 1: CSS optimization + HTML processing (existente)
-      const results = processAllHtml(outputDir, { ...options, _cssMode: cssMode }, runtimeSrc)
+      processAllHtml(outputDir, { ...options, _cssMode: cssMode }, runtimeSrc)
 
       // Phase 2: Detect layouts + diff pages + generate payloads
       console.log('\n  ┌─ nuxt-lite: diff & payloads ──────')
@@ -60,30 +59,26 @@ export default defineNuxtModule<ModuleOptions>({
 
         if (diffResult.blockCount === 0) continue
 
-        // Salvar template
+        // Salvar template (referência com marcadores)
         const templateName = layout.replace(/[^a-zA-Z0-9_-]/g, '_')
         const templatePath = join(nlDir, `${templateName}.html`)
         writeFileSync(templatePath, diffResult.templateHtml, 'utf-8')
 
-        // Substituir o HTML de cada página pelo template com marcadores
-        // Assim o runtime encontra <!--NL:N--> no DOM
+        // Para CADA página: salvar o template com marcadores (todas usam o mesmo template)
+        // O conteúdo específico de cada página vai no payload
         for (const page of pages) {
+          // Escrever template com marcadores em TODAS as páginas do grupo
           writeFileSync(page.htmlPath, diffResult.templateHtml, 'utf-8')
-        }
 
-        // Salvar payloads na estrutura de diretórios da rota
-        for (const [route, payload] of diffResult.payloads) {
-          // Gerar payload NO CAMINHO DA ROTA, substituindo o _payload.json do Nuxt
-          // Ex: /manuscritos/despertar → dist/manuscritos/despertar/_payload.json
-          // Ex: / → dist/_payload.json
-          const routePath = route === '/' ? '' : route.replace(/^\//, '').replace(/\/$/, '')
-          const payloadDir = routePath ? join(outputDir, routePath) : outputDir
-          mkdirSync(payloadDir, { recursive: true })
-          const payloadPath = join(payloadDir, '_payload.json')
-          writeFileSync(payloadPath, JSON.stringify(payload), 'utf-8')
+          // Salvar payload NO CAMINHO DA ROTA
+          const routePath = page.route === '/' ? '' : page.route.replace(/^\//, '').replace(/\/$/, '')
+          const payloadDirPath = routePath ? join(outputDir, routePath) : outputDir
+          mkdirSync(payloadDirPath, { recursive: true })
+          const payloadPath = join(payloadDirPath, '_payload.json')
+          writeFileSync(payloadPath, JSON.stringify(pagePayload), 'utf-8')
           totalPayloads++
 
-          manifest[route] = {
+          manifest[page.route] = {
             template: `${templateName}.html`,
             blocks: diffResult.blockCount,
           }

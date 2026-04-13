@@ -306,11 +306,21 @@
     return maxIdx >= 0 ? 'known' : 'unknown';
   }
 
-  // Load manifest asynchronously
+  // Load manifest AND hydrate current page
   loadManifest().then(function(tpl) {
     var route = normalizeHref(location.pathname);
     if (tpl && tpl[route]) {
       currentTemplate = tpl[route].template;
+
+      // Hydrate current page: replace markers with payload content
+      var payloadUrl = route === '/'
+        ? '/_payload.json'
+        : route + '/_payload.json';
+      fetchJSON(payloadUrl).then(function(payload) {
+        if (payload) {
+          applyPayload(payload);
+        }
+      });
     }
   });
 

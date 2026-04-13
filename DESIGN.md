@@ -266,11 +266,22 @@ Em vez de diff sequencial arbitrário ou muitos-para-muitos, a ideia é:
 
 ## Próximos Passos
 
-- [ ] **1.** `src/html/pretty-print.ts` — formatar HTML minificado para diff
-- [ ] **2.** `src/html/diff.ts` — LCS iterativo acumulativo 1-para-muitos
-- [ ] **3.** `src/html/layout-detector.ts` — detectar layout de cada página
-- [ ] **4.** `src/html/payload-gen.ts` — gerar template superset + payloads JSON
-- [ ] **5.** Atualizar `src/module.ts` — integrar tudo no hook `close`
-- [ ] **6.** Atualizar `src/runtime/lite.js` — fetch payloads + substituir marcadores
-- [ ] **7.** Atualizar `src/types.ts` — novos tipos
-- [ ] **8.** Testar com build real do Orar e Labutar
+- [x] **1.** `src/html/pretty-print.ts` — ~~formatar HTML minificado para diff~~ (DESCARTADO — diff opera no minificado)
+- [x] **2.** `src/html/diff.ts` — LCS iterativo acumulativo 1-para-muitos
+- [x] **3.** `src/html/layout-detector.ts` — detectar layout de cada página
+- [ ] **4. BUG CRÍTICO:** `buildMarkedTemplate` não injeta marcadores — tenta buscar conteúdo do alvo na referência (não existe lá). Correção: usar posições dos blocos comuns para marcar gaps na referência.
+- [ ] **5.** Integrar correção no module.ts
+- [ ] **6.** Atualizar runtime lite.js
+- [ ] **7.** Testar com build real
+
+### Diagnóstico (2025-04-12)
+
+Testes revelam:
+- **0 marcadores** `<!--NL:N-->` injetados em qualquer HTML
+- **20 páginas** agrupadas em 1 template (correto — projeto tem 1 layout)
+- **Cada página tem 1 bloco com conteúdo** + head = payloads funcionam mas sem marcadores no DOM
+- **index.html**: 19 blocos micro (0.0-0.3KB cada) — bloco 0 vazio
+- **manuscritos/despertar**: bloco 12 = 22KB (body inteiro) — LCS não encontrou comuns suficientes
+- **manuscritos/ao-redor-do-portao**: bloco 11 = 17.4KB
+- **Bodies são diferentes** (primeira diff no char 7402 — título do artigo)
+- **Root cause**: `buildMarkedTemplate` recebe `content` do alvo e busca na referência → não encontra → zero marcadores
