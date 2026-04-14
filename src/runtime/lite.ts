@@ -1,9 +1,8 @@
 /**
  * nuxt-lite — Client Runtime (TypeScript)
- * 
+ *
  * - SPA navigation with DOM reconstruction via JSON payload
  * - Reactive state system (Proxy-based)
- * - Intelligent prefetch via IntersectionObserver (lazy)
  * - A11y: focus management on navigation
  */
 
@@ -40,7 +39,6 @@ interface PagePayload {
   const subs = new Map<string, Set<(v: any, o: any) => void>>()
   let transitionMs: number = 0
   let navigating = false
-  const prefetchCache = new Map<string, boolean>()
   let currentRoute: string = normalizeHref(location.pathname)
 
   // ===== Reactive System =====
@@ -267,31 +265,30 @@ interface PagePayload {
   }
 
   // ===== Prefetch Strategy =====
-  const prefetchObserver = (typeof IntersectionObserver !== 'undefined') 
-    ? new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-          if (entry.isIntersecting) {
-            const link = entry.target as HTMLAnchorElement
-            const href = link.getAttribute('href')
-            if (href) prefetchRoute(href)
-            if (prefetchObserver) prefetchObserver.unobserve(link)
-          }
-        })
-      }, { rootMargin: '200px' })
-    : null
+  // Hover-based prefetch with duplicate protection
+  const prefetching = new Set<string>()
+
+  function hasPrefetchLink(url: string): boolean {
+    return !!document.querySelector(`link[rel="prefetch"][href="${url}"]`)
+  }
 
   function prefetchRoute(href: string) {
     if (!isNuxtPage(href)) return
     const r = normalizeHref(href)
-    if (r === state.page || prefetchCache.has(r)) return
-    
+    if (r === state.page || prefetching.has(r)) return
+
     // Check for Save-Data header or slow connection
     if ((navigator as any).connection && ((navigator as any).connection.saveData || (navigator as any).connection.effectiveType.includes('2g'))) return
 
-    prefetchCache.set(r, true)
     const u = r === '/' ? '/_payload.json' : r + '_payload.json'
-    
-    // Fetch payload with low priority
+
+    // Check if link already exists in head
+    if (hasPrefetchLink(u)) {
+      prefetching.add(r)
+      return
+    }
+
+    prefetching.add(r)
     const link = document.createElement('link')
     link.rel = 'prefetch'
     link.href = u
@@ -305,12 +302,12 @@ interface PagePayload {
     document.addEventListener('click', (e) => {
       const link = (e.target as HTMLElement).closest('a[href]') as HTMLAnchorElement
       if (!link) return
-      
+
       const href = link.getAttribute('href')
       if (!href || href[0] !== '/' || href.startsWith('/_nuxt')) return
       if (e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return
       if (link.target && link.target !== '_self') return
-      
+
       e.preventDefault()
       navigate(href)
     }, false)
@@ -320,24 +317,35 @@ interface PagePayload {
       navigate(window.location.pathname, false)
     })
 
-    // Setup prefetch observer for all internal links
-    const setupObservers = () => {
-      if (!prefetchObserver) return
-      document.querySelectorAll('a[href^="/"]').forEach(link => {
-        if (isNuxtPage(link.getAttribute('href'))) {
-          prefetchObserver.observe(link)
-        }
-      })
-    }
+    // Hover prefetch with debounce to avoid rapid-fire events
+    let hoverTarget: HTMLElement | null = null
+    let hoverTimer: ReturnType<typeof setTimeout> | null = null
 
-    setupObservers()
-    // Re-observe after navigation
-    on('page', () => setTimeout(setupObservers, 500))
-
-    // Hover fallback for non-observer browsers or dynamic links
     document.addEventListener('mouseover', (e) => {
       const link = (e.target as HTMLElement).closest('a[href]') as HTMLAnchorElement
-      if (link) prefetchRoute(link.getAttribute('href')!)
+      if (!link) return
+
+      // Clear previous timer
+      if (hoverTimer) clearTimeout(hoverTimer)
+      hoverTarget = link
+
+      // Debounce: only prefetch after 100ms of stable hover
+      hoverTimer = setTimeout(() => {
+        if (hoverTarget === link) {
+          prefetchRoute(link.getAttribute('href')!)
+        }
+      }, 100)
+    }, { passive: true })
+
+    document.addEventListener('mouseout', (e) => {
+      const link = (e.target as HTMLElement).closest('a[href]') as HTMLAnchorElement
+      if (link && hoverTarget === link) {
+        hoverTarget = null
+        if (hoverTimer) {
+          clearTimeout(hoverTimer)
+          hoverTimer = null
+        }
+      }
     }, { passive: true })
   }
 
