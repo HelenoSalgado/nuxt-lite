@@ -6,14 +6,22 @@
       <NuxtLink to="/sobre">Sobre</NuxtLink>
       <NuxtLink to="/contato">Contato</NuxtLink>
     </nav>
-    
+
     <main data-page-content>
-      <h2 data-page-title>Contato</h2>
+      <h2 data-page-title>
+        Contato
+      </h2>
       <div data-page-body>
         <p>Entre em contato conosco!</p>
         <form @submit.prevent="submitForm">
-          <input v-model="email" type="email" placeholder="Seu email" />
-          <button type="submit">Enviar</button>
+          <input
+            v-model="email"
+            type="email"
+            placeholder="Seu email"
+          >
+          <button type="submit">
+            Enviar
+          </button>
         </form>
       </div>
     </main>

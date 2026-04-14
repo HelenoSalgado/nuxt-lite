@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, unicorn/no-new-array */
 /**
  * devalue-parse.ts — Parser compatível com o formato de serialização do Nuxt 4
  *
@@ -21,13 +22,13 @@ const SPARSE = -7
 // Revivers padrão do Nuxt (node_modules/nuxt/dist/app/plugins/revive-payload.client.js)
 // Apenas desembrulham os wrappers de reatividade — retornam o dado puro
 const NUXT_REVIVERS: Record<string, (value: any) => any> = {
-  NuxtError: (data) => data,
-  EmptyShallowRef: (data) => data,
-  EmptyRef: (data) => data,
-  ShallowRef: (data) => data,
-  ShallowReactive: (data) => data,
-  Ref: (data) => data,
-  Reactive: (data) => data,
+  NuxtError: data => data,
+  EmptyShallowRef: data => data,
+  EmptyRef: data => data,
+  ShallowRef: data => data,
+  ShallowReactive: data => data,
+  Ref: data => data,
+  Reactive: data => data,
 }
 
 /**
@@ -54,11 +55,11 @@ function unflatten(parsed: number | any[], revivers?: Record<string, (value: any
   }
 
   const values = parsed as any[]
-  const hydrated = new Array(values.length)
+  const hydrated = Array.from({ length: values.length })
 
   function hydrate(index: number, standalone = false): any {
     if (index === UNDEFINED) return undefined
-    if (index === NAN) return NaN
+    if (index === NAN) return Number.NaN
     if (index === POSITIVE_INFINITY) return Infinity
     if (index === NEGATIVE_INFINITY) return -Infinity
     if (index === NEGATIVE_ZERO) return -0
@@ -141,15 +142,17 @@ function unflatten(parsed: number | any[], revivers?: Record<string, (value: any
           default:
             hydrated[index] = value
         }
-      } else if (value[0] === SPARSE) {
+      }
+      else if (value[0] === SPARSE) {
         const len = value[1]
         const array = new Array(len)
         hydrated[index] = array
         for (let i = 2; i < value.length; i += 2) {
           array[value[i]] = hydrate(value[i + 1])
         }
-      } else {
-        const array = new Array(value.length)
+      }
+      else {
+        const array = Array.from({ length: value.length })
         hydrated[index] = array
         for (let i = 0; i < value.length; i++) {
           const n = value[i]

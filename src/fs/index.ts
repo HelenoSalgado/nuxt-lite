@@ -11,10 +11,15 @@ export function collectAllCssFiles(rootDir: string): Map<string, string> {
     for (const entry of readdirSync(dir)) {
       const full = join(dir, entry)
       const st = statSync(full)
-      if (st.isDirectory()) { walk(full); continue }
+      if (st.isDirectory()) {
+        walk(full)
+        continue
+      }
       if (!entry.endsWith('.css') || SKIP_CSS_FILES.includes(entry)) continue
       const href = '/' + relative(rootDir, full).replace(/\\/g, '/')
-      try { content.set(href, readFileSync(full, 'utf-8')) }
+      try {
+        content.set(href, readFileSync(full, 'utf-8'))
+      }
       catch { /* skip unreadable files */ }
     }
   }
@@ -33,14 +38,18 @@ export function removeRedundantCssFiles(rootDir: string, keepPath: string): stri
     for (const entry of readdirSync(dir)) {
       const full = join(dir, entry)
       const st = statSync(full)
-      if (st.isDirectory()) { walk(full); continue }
+      if (st.isDirectory()) {
+        walk(full)
+        continue
+      }
       if (!entry.endsWith('.css')) continue
       const rel = relative(rootDir, full).replace(/\\/g, '/')
       if (rel === keepRel) continue
       try {
         unlinkSync(full)
         removed.push(rel)
-      } catch { /* skip */ }
+      }
+      catch { /* skip */ }
     }
   }
 

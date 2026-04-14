@@ -6,13 +6,17 @@
       <NuxtLink to="/sobre">Sobre</NuxtLink>
       <NuxtLink to="/contato">Contato</NuxtLink>
     </nav>
-    
+
     <main data-page-content>
-      <h2 data-page-title>Bem-vindo!</h2>
+      <h2 data-page-title>
+        Bem-vindo!
+      </h2>
       <div data-page-body>
         <p>Este é o playground do nuxt-lite.</p>
         <p>Estado reativo: <span id="counter">{{ counter }}</span></p>
-        <button @click="counter++">Incrementar</button>
+        <button @click="counter++">
+          Incrementar
+        </button>
       </div>
     </main>
   </div>
@@ -26,7 +30,7 @@ const counter = ref(0)
 // Simular dados da página
 const pageData = {
   title: 'Bem-vindo!',
-  content: '<p>Este é o playground do nuxt-lite.</p>'
+  content: '<p>Este é o playground do nuxt-lite.</p>',
 }
 
 // Disponibilizar para payload
@@ -35,8 +39,8 @@ if (import.meta.server) {
     title: 'Home - nuxt-lite',
     script: [{
       type: 'application/json',
-      children: JSON.stringify(pageData)
-    }]
+      children: JSON.stringify(pageData),
+    }],
   })
 }
 
@@ -51,6 +55,11 @@ onMounted(() => {
 </script>
 
 <style>
+@font-face {
+  font-family: 'TestFont';
+  src: url('../fonts/test.woff2') format('woff2');
+}
+
 nav {
   display: flex;
   gap: 1rem;

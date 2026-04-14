@@ -6,9 +6,11 @@
       <NuxtLink to="/sobre">Sobre</NuxtLink>
       <NuxtLink to="/contato">Contato</NuxtLink>
     </nav>
-    
+
     <main data-page-content>
-      <h2 data-page-title>Sobre o nuxt-lite</h2>
+      <h2 data-page-title>
+        Sobre o nuxt-lite
+      </h2>
       <div data-page-body>
         <p>nuxt-lite é um módulo para geração estática com hidratação leve.</p>
         <ul>
@@ -24,9 +26,9 @@
 <script setup>
 import { onMounted } from 'vue'
 
-const pageData = {
+const _pageData = {
   title: 'Sobre o nuxt-lite',
-  content: '<p>nuxt-lite é um módulo para geração estática com hidratação leve.</p>'
+  content: '<p>nuxt-lite é um módulo para geração estática com hidratação leve.</p>',
 }
 
 onMounted(() => {

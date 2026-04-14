@@ -71,7 +71,7 @@ function selectorMatches(selector: string, used: ReadonlySet<string>): boolean {
     if (used.has(part)) return true
 
     // Extract class names: .foo, .foo:hover, .foo.bar
-    const classMatches = part.match(/\.([a-zA-Z_-][a-zA-Z0-9_-]*)/g)
+    const classMatches = part.match(/\.([a-z_-][\w-]*)/gi)
     if (classMatches) {
       for (const raw of classMatches) {
         const cls = raw.slice(1)
@@ -81,7 +81,7 @@ function selectorMatches(selector: string, used: ReadonlySet<string>): boolean {
     }
 
     // Extract IDs: #foo
-    const idMatches = part.match(/#([a-zA-Z_-][a-zA-Z0-9_-]*)/g)
+    const idMatches = part.match(/#([a-z_-][\w-]*)/gi)
     if (idMatches) {
       for (const raw of idMatches) {
         const id = raw.slice(1)
@@ -90,7 +90,7 @@ function selectorMatches(selector: string, used: ReadonlySet<string>): boolean {
     }
 
     // Extract element name: div, span, etc.
-    const elemMatch = part.match(/^([a-zA-Z][a-zA-Z0-9]*)/)
+    const elemMatch = part.match(/^([a-z][a-z0-9]*)/i)
     if (elemMatch && elemMatch[1] && used.has(elemMatch[1])) return true
   }
 

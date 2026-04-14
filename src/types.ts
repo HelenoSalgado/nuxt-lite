@@ -31,6 +31,13 @@ export interface ModuleOptions {
    * @default true
    */
   cleanHtml?: boolean
+
+  /**
+   * List of CSS classes or selectors to preserve from tree-shaking.
+   * Useful for classes added dynamically via JS.
+   * @default []
+   */
+  safelist?: string[]
 }
 
 // ============================================================================
@@ -81,14 +88,14 @@ export const SKIP_CSS_FILES = Object.freeze(['optimized.css', 'main.css'])
 
 export const CLASS_RE = /\bclass=["']([^"']*)["']/g
 export const ID_RE = /\bid=["']([^"']*)["']/g
-export const DATA_RE = /\bdata-([a-zA-Z0-9_-]+)=/g
+export const DATA_RE = /\bdata-([\w-]+)=/g
 export const HTML_TAG_RE = /<([a-z][a-z0-9]*)\b[^>]*>/gi
 
 // ============================================================================
 // Regex patterns — HTML cleaning
 // ============================================================================
 
-export const CSS_LINK_RE = /<link[^>]*rel="stylesheet"[^>]*href="[^"]*"[^>]*\/?>\s*/g
+export const CSS_LINK_RE = /<link[^>]*rel="stylesheet"[^>]*href="[^"]*"[^>]*>\s*/g
 export const STYLE_TAG_RE = /<style[^>]*>[\s\S]*?<\/style>\s*/g
 export const VUE_RUNTIME_RE = /<script[^>]*type="module"[^>]*src="\/_nuxt\/[^"]*"[^>]*><\/script>/g
 export const MODULEPRELOAD_RE = /<link[^>]*rel="modulepreload"[^>]*href="\/_nuxt\/[^"]*"[^>]*>/g

@@ -3,11 +3,25 @@ import { CSS_COMMENT_RE, CSS_WS_RE, SKIP_AT_RULE_RE } from '../types'
 /**
  * Parse a CSS string into a Map<selector, fullRule>.
  * Uses brace-counting to correctly handle nested @media blocks.
+ * Also normalizes relative URLs to absolute paths.
  */
 export function parseCssRules(css: string): Map<string, string> {
   const rules = new Map<string, string>()
   const seenAtRules = new Set<string>()
-  const clean = css.replace(CSS_COMMENT_RE, '').replace(CSS_WS_RE, ' ')
+  
+  // Normalize URLs: convert relative paths to absolute paths
+  // Matches url("fonts/...") or url("../fonts/...") but ignores data:, http://, and already absolute paths /
+  let clean = css
+    .replace(/url\(['"]?([^'"]+)['"]?\)/g, (match, url) => {
+      if (url.startsWith('data:') || url.startsWith('http') || url.startsWith('/')) {
+        return match
+      }
+      // Remove any leading ./ or ../ and make it absolute
+      const absoluteUrl = '/' + url.replace(/^(\.\.?\/)+/, '')
+      return `url("${absoluteUrl}")`
+    })
+    .replace(CSS_COMMENT_RE, '')
+    .replace(CSS_WS_RE, ' ')
 
   let i = 0
   while (i < clean.length) {
@@ -42,7 +56,8 @@ export function parseCssRules(css: string): Map<string, string> {
       // Extract inner selectors for matching
       const inner = block.slice(1, -1).trim()
       extractInnerSelectors(inner, selector, rules)
-    } else {
+    }
+    else {
       rules.set(selector, selector + ' ' + block)
     }
 
@@ -63,7 +78,10 @@ function extractInnerSelectors(inner: string, atRule: string, rules: Map<string,
     if (braceStart === -1) break
 
     const sel = inner.slice(i, braceStart).trim()
-    if (!sel) { i = braceStart + 1; continue }
+    if (!sel) {
+      i = braceStart + 1
+      continue
+    }
 
     let depth = 1
     let j = braceStart + 1

@@ -1,26 +1,29 @@
 # nuxt-lite
 
-Módulo Nuxt para geração estática com hidratação leve, otimização de CSS e navegação SPA customizada.
+Módulo Nuxt para geração estática extrema, eliminando o Vue runtime do cliente e substituindo-o por um sistema de hidratação leve e acessível.
 
 ## Visão Geral
 
-Elimina o **Vue runtime** (~228KB) do bundle do cliente e o substitui por um script de **~4KB** que mantém:
+O **nuxt-lite** transforma seu site Nuxt em um SPA ultra-rápido que envia apenas o HTML estático e um script de **~5KB** (minificado e zipado) para o cliente. Ele mantém a experiência de navegação fluida (SPA) sem o custo de ~500KB do framework Vue/Nuxt completo no navegador.
 
-- ✅ **Hidratação a partir do HTML estático** (SSR completo)
-- ✅ **Navegação SPA com transições CSS nativas** (respeita `.page-enter-active`, etc.)
-- ✅ **Prefetch nativo por hover** (`<link rel="prefetch">`, browser gerencia cache)
-- ✅ **CSS tree-shaking** (apenas seletores usados por página)
-- ✅ **SEO intacto** (HTML estático completo no SSR)
+### Principais Recursos (Refatorado)
+
+- ✅ **Hidratação Instantânea:** Constrói o DOM a partir de payloads JSON extraídos durante o build.
+- ✅ **Navegação SPA:** Intercepta links e realiza a troca de conteúdo com transições CSS nativas.
+- ✅ **Prefetch Inteligente:** Usa `IntersectionObserver` para pré-carregar páginas conforme os links entram na viewport (respeita `Save-Data` e conexões lentas).
+- ✅ **CSS Tree-shaking de Alta Fidelidade:** Usa `linkedom` para análise precisa de seletores usados em cada página.
+- ✅ **Acessibilidade (A11y):** Gerencia automaticamente o foco do teclado após a navegação para garantir que usuários de leitores de tela percebam a mudança de conteúdo.
+- ✅ **Normalização de Assets:** Corrige automaticamente caminhos de fontes e imagens no CSS inline para funcionarem em rotas aninhadas.
+- ✅ **Safelist CSS:** Permite preservar classes adicionadas dinamicamente via JavaScript.
 
 ## Performance
 
 | Métrica | Nuxt padrão | nuxt-lite |
 |---|---|---|
-| JS na primeira requisição | ~530 KB | ~4 KB |
-| Redução de JS | — | **99.2%** |
-| CSS | Vários arquivos | 1 inline ou 1 arquivo |
-| SEO | ✅ | ✅ (SSR completo) |
-| Transições | ✅ | ✅ (CSS nativo do projeto) |
+| JS na primeira requisição | ~530 KB | **~5 KB** |
+| Redução de JS | — | **99.1%** |
+| SEO | ✅ Completo | ✅ Completo |
+| Interatividade | ⚠️ Estático/JS Puro | ✅ SPA dinâmico |
 
 ## Instalação
 
@@ -33,10 +36,11 @@ Ou adicione manualmente ao `nuxt.config.ts`:
 ```ts
 export default defineNuxtConfig({
   modules: [
-    '~~/nuxt-lite/src/module',  // deve ser o PRIMEIRO módulo
+    '~~/nuxt-lite/src/module',  // Deve ser o PRIMEIRO módulo
   ],
   nuxtLite: {
-    optimizeCss: 'inline',
+    optimizeCss: 'inline', // 'inline' | 'file' | false
+    safelist: ['is-active', 'menu-open'], // Classes dinâmicas a preservar
   },
 })
 ```
@@ -45,207 +49,60 @@ export default defineNuxtConfig({
 
 | Opção | Padrão | Descrição |
 |---|---|---|
-| `optimizeCss` | `false` | Otimização de CSS: `true`/`'inline'` para tree-shake por página, `'file'` para arquivo único |
-| `inlineStyles` | `false` | **Deprecated.** Use `optimizeCss` |
-| `stripAttributes` | `['data-v-', '__vue_ssr__', 'data-server-rendered']` | Atributos Vue SSR a remover do HTML |
-| `cleanHtml` | `true` | Se deve limpar o HTML (remover artefatos Nuxt/Vue do SSR) |
-
-### Detalhes das Opções
-
-#### `optimizeCss`
-
-| Modo | Comportamento |
-|---|---|
-| `false` | Sem otimização (comportamento padrão do Nuxt/Vite) |
-| `true` ou `'inline'` | Tree-shake CSS por página e injeta em `<style>` no `<head>` |
-| `'file'` | Tree-shake globalmente e gera `/css/optimized.css` com `<link rel="preload">` + `<link rel="stylesheet">` |
-
-#### `stripAttributes`
-Lista de atributos que o Nuxt/Vue adiciona ao HTML durante o SSR e que não são mais necessários após a remoção do Vue runtime. Útil para reduzir o tamanho do HTML final.
-
-#### `cleanHtml`
-Quando ativado, remove tags `<script>` do bundle do Nuxt, links de `modulepreload` e `prefetch` que não são mais úteis para o runtime lite, garantindo um HTML limpo e focado em performance.
-
-### Exemplos de Configuração
-
-#### CSS inline (recomendado para sites pequenos/médios)
-
-```ts
-nuxtLite: {
-  optimizeCss: 'inline',
-}
-```
-
-#### CSS em arquivo único (ideal para sites grandes)
-
-```ts
-nuxtLite: {
-  optimizeCss: 'file',
-}
-```
+| `optimizeCss` | `false` | Otimização de CSS: `true`/`'inline'` (por página) ou `'file'` (arquivo único global). |
+| `safelist` | `[]` | Lista de classes ou seletores que NÃO devem ser removidos no tree-shaking. |
+| `cleanHtml` | `true` | Remove artefatos Nuxt/Vue (`__NUXT_DATA__`, etc.) e limpa comentários SSR. |
 
 ## Como Funciona
 
-### CSS Tree-Shaking
+### Build-time (Geração Estática)
+1. Durante o `nuxt generate`, o módulo intercepta cada página gerada.
+2. O HTML é parseado usando o **linkedom** (um parser DOM ultra-rápido para Node).
+3. O conteúdo do `<main>` é extraído e transformado em uma árvore JSON compacta (`_payload.json`).
+4. Scripts e estilos originais do Vue/Nuxt são removidos para garantir um HTML puro.
+5. O runtime `lite.js` (escrito em TypeScript) é injetado no final do `<body>`.
 
-1. **Coleta** todos os arquivos `.css` do `dist/_nuxt/`
-2. **Extrai** classes, IDs, nomes de tags HTML e `data-*` de cada página
-3. **Parseia** o CSS completo com brace-counting (suporta `@media` aninhados)
-4. **Filtra** apenas os blocos CSS cujos seletores são usados na página
-5. **Preserva** `@font-face`, `@keyframes`, transições Nuxt e seletores essenciais
-6. **Minifica** em linha única (sem quebras)
-7. **Remove** arquivos CSS redundantes do output
-
-### Durante o `nuxt generate`:
-
-1. **Tree-shake CSS** → injeta apenas seletores usados (inline ou arquivo)
-2. **Remove Vue runtime** → `<script type="module" src="/_nuxt/...">`
-3. **Remove modulepreload** → `<link rel="modulepreload" href="/_nuxt/...">`
-4. **Remove prefetch de JS** → `<link rel="preload/prefetch" href="/_nuxt/*.js">`
-5. **Remove artefatos Nuxt** → `__NUXT_DATA__`, configs, teleports
-6. **Injeta runtime lite** → ~4KB inline antes do `</body>`
-
-### No cliente:
-
-1. **Primeira carga** → HTML estático renderizado instantaneamente (zero JS bloqueante)
-2. **Runtime carrega** → prepara sistema reativo e navegação SPA
-3. **Navegação** → intercepta links, busca HTML novo (cache do browser se prefetched), troca conteúdo com transição CSS nativa
-4. **Prefetch** → injeta `<link rel="prefetch" as="document">` no hover — browser gerencia prioridade e cache
-
-## Estrutura de Arquivos Gerados
-
-```
-dist/
-├── index.html                    # HTML estático + CSS inline + runtime
-├── sobre/
-│   └── index.html                # HTML estático + CSS inline + runtime
-└── _nuxt/
-    └── *.css                     # (removidos se optimizeCss: 'inline')
-```
-
-Ou no modo `file`:
-
-```
-dist/
-├── index.html                    # HTML estático + <link rel="preload"> + <link>
-├── css/
-│   └── optimized.css             # CSS tree-shaken de todas as páginas
-└── _nuxt/
-    └── *.css                     # (removidos)
-```
-
-## Runtime Lite (~4KB)
-
-O script injetado fornece:
-
-### Sistema Reativo
-```js
-// Acessível via window.__NuxtLite
-const { reactive, on } = window.__NuxtLite
-
-const state = reactive({ page: '/' })
-on('page', (newPage) => console.log('Navegou para:', newPage))
-```
-
-### Estado Global
-```js
-window.__NUXT_LITE_STATE__.page  // rota atual
-```
-
-### Transição de Páginas
-
-Respeita as classes CSS configuradas no projeto (ex: `.page-enter-active`, `.page-leave-from`). O runtime lê a duração da transição via `getComputedStyle` e usa `transitionend` para sincronização precisa.
-
-### Prefetch Nativo por Hover
-
-- Injeta `<link rel="prefetch" as="document">` no `<head>` ao passar o mouse
-- **Browser gerencia prioridade** — não compete com a navegação atual
-- **Cache HTTP nativo** — quando o usuário clica, o `fetch()` já encontra a página em cache
-- **Respeita `Save-Data`** — browsers em modo economia ignoram automaticamente
-- **Sem cache customizado** — menos código, menos bugs
+### Client-side (Navegação)
+1. Quando um link entra na tela, o `IntersectionObserver` inicia o prefetch do JSON daquela página.
+2. Ao clicar, o runtime busca o JSON (geralmente já em cache) e reconstrói apenas o conteúdo variável.
+3. Aplica transições CSS (respeitando `.page-enter-active`, etc.).
+4. **Foco:** O runtime move o foco para o primeiro `<h1>` encontrado ou para o contêiner principal, seguindo boas práticas de acessibilidade.
 
 ## Estrutura de Páginas
 
-Para que a navegação SPA funcione corretamente, cada página deve ter um container de conteúdo identificável. O runtime procura por:
-
-1. Elemento com atributo `data-page-content`
-2. Ou tag `<main>` como fallback
+Para que a navegação funcione, envolva o conteúdo variável no seu layout principal:
 
 ```vue
+<!-- layouts/default.vue -->
 <template>
-  <main data-page-content>
-    <h1>Título da Página</h1>
-    <p>Conteúdo da página...</p>
-  </main>
+  <div>
+    <header>...</header>
+    <main data-page-content> <!-- Atributo obrigatório ou tag <main> -->
+      <slot />
+    </main>
+    <footer>...</footer>
+  </div>
 </template>
 ```
 
-### Transições CSS Obrigatórias
+## Transições CSS
 
-Defina estas classes no CSS do projeto para que as transições funcionem:
+Defina as classes de transição no seu CSS global:
 
 ```css
-.page-enter-active,
-.page-leave-active {
+.page-enter-active, .page-leave-active {
   transition: opacity 0.3s ease;
 }
-
-.page-enter-from,
-.page-leave-to {
+.page-enter-from, .page-leave-to {
   opacity: 0;
 }
 ```
 
-O runtime detecta automaticamente a duração via `getComputedStyle`. Se nenhuma transição for encontrada, usa 400ms como fallback.
+## Limitações
 
-## Estrutura do Módulo
+- **Apenas sites estáticos:** Projetado exclusivamente para `nuxt generate`.
+- **Sem reatividade Vue no cliente:** Como o Vue runtime é removido, componentes que dependem de `ref`, `reactive` ou eventos Vue no navegador não funcionarão. Use JavaScript puro ou Web Components para interatividades leves.
 
-```
-nuxt-lite/src/
-├── module.ts              # Entry point — hook close do Nuxt
-├── types.ts               # ModuleOptions, constantes, regex, helpers
-├── index.ts               # NuxtLiteOptions (export público)
-├── css/
-│   ├── parser.ts          # parseCssRules + extractInnerSelectors
-│   └── filter.ts          # filterCssBySelectors + selectorMatches
-├── html/
-│   ├── extract.ts         # extractUsedSelectors (HTML → Set)
-│   ├── clean.ts           # stripCss, stripVueRuntime, stripNuxtScripts
-│   └── process.ts         # processAllHtml + processFile
-├── fs/
-│   └── index.ts           # collectAllCssFiles, removeRedundantCssFiles
-└── runtime/
-    ├── lite.js            # Runtime injetado (~4KB)
-    └── server/
-        └── plugin.ts      # Nitro plugin (headers customizados)
-```
-
-## Desenvolvimento
-
-```bash
-# Instalar dependências
-npm install
-
-# Preparar módulo
-npm run dev:prepare
-
-# Rodar playground
-npm run dev
-
-# Build estático para testar o runtime lite
-npm run dev:build && npx nuxt generate playground
-
-# Build do módulo
-npm run prepack
-```
-
-## Limitações Conhecidas
-
-- **Apenas `nuxt generate`**: Não funciona com `nuxt build` (servidor Nitro). Projetado para sites estáticos.
-- **Zero runtime no dev**: O módulo só atua em produção. Não interfere no desenvolvimento.
-- **Sem Vue no cliente**: Componentes Vue que dependem de reatividade no cliente não funcionam após navegação SPA. Ideal para conteúdo estático.
-- **HTML bem-formado**: A limpeza usa regex. HTML malformado pode causar problemas.
-
-## License
+## Licença
 
 MIT
