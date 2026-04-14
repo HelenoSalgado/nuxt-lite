@@ -1,46 +1,38 @@
 # nuxt-lite
 
-Módulo Nuxt para geração estática extrema, eliminando o Vue runtime do cliente e substituindo-o por um sistema de hidratação leve e acessível.
+Módulo Nuxt que substitui o JavaScript do Vue/Nuxt no cliente por um runtime leve (~5KB minificado e gzip) que gerencia navegação SPA e troca de conteúdo via JSON.
 
 ## Visão Geral
 
-O **nuxt-lite** transforma seu site Nuxt em um SPA ultra-rápido que envia apenas o HTML estático e um script de **~5KB** (minificado e zipado) para o cliente. Ele mantém a experiência de navegação fluida (SPA) sem o custo de ~500KB do framework Vue/Nuxt completo no navegador.
+O **nuxt-lite** é feito para `nuxt generate`. Durante o build, o conteúdo de cada página é extraído do HTML SSR e transformado em payloads JSON compactos. No cliente, um runtime mínimo em TypeScript reconstrói o DOM a partir desses payloads e intercepta cliques em links para fazer prefetch e troca de conteúdo — sem carregar o framework Vue (~500KB).
 
-### Principais Recursos (Refatorado)
+### O que faz
 
-- ✅ **Hidratação Instantânea:** Constrói o DOM a partir de payloads JSON extraídos durante o build.
-- ✅ **Navegação SPA:** Intercepta links e realiza a troca de conteúdo com transições CSS nativas.
-- ✅ **Prefetch Inteligente:** Usa `IntersectionObserver` para pré-carregar páginas conforme os links entram na viewport (respeita `Save-Data` e conexões lentas).
-- ✅ **CSS Tree-shaking de Alta Fidelidade:** Usa `linkedom` para análise precisa de seletores usados em cada página.
-- ✅ **Acessibilidade (A11y):** Gerencia automaticamente o foco do teclado após a navegação para garantir que usuários de leitores de tela percebam a mudança de conteúdo.
-- ✅ **Normalização de Assets:** Corrige automaticamente caminhos de fontes e imagens no CSS inline para funcionarem em rotas aninhadas.
-- ✅ **Safelist CSS:** Permite preservar classes adicionadas dinamicamente via JavaScript.
+- **Payload JSON por página:** O conteúdo variável (dentro de `<main>` ou `[data-page-content]`) é serializado em `_payload.json` durante o build.
+- **Runtime leve:** Um script em TypeScript (~5KB min+gzip) substitui o Vue runtime no cliente.
+- **Navegação SPA:** Intercepta links, faz prefetch via `IntersectionObserver` e troca o conteúdo com transições CSS.
+- **CSS por página:** Extrai apenas os seletores CSS usados em cada página usando `linkedom`. Classes adicionadas dinamicamente via JS podem ser preservadas com `safelist`.
+- **Acessibilidade:** Move o foco para o `<h1>` ou container principal após navegação.
+- **Limpeza do HTML:** Remove artefatos SSR do Nuxt/Vue (`__NUXT_DATA__`, comentários, scripts desnecessários).
 
-## Performance
+### O que NÃO faz
 
-| Métrica | Nuxt padrão | nuxt-lite |
-|---|---|---|
-| JS na primeira requisição | ~530 KB | **~5 KB** |
-| Redução de JS | — | **99.1%** |
-| SEO | ✅ Completo | ✅ Completo |
-| Interatividade | ⚠️ Estático/JS Puro | ✅ SPA dinâmico |
+- Não é hidratação Vue. O Vue runtime não está presente no cliente. Componentes que dependem de `ref`, `reactive` ou reatividade Vue no navegador não funcionam.
+- Não funciona com SSR ou `nuxt dev`. É feito exclusivamente para `nuxt generate`.
+- Não é substituto para apps que precisam de reatividade no cliente. Para interatividade leve, use JavaScript puro ou Web Components.
 
 ## Instalação
 
-```bash
-npx nuxi module add nuxt-lite
-```
-
-Ou adicione manualmente ao `nuxt.config.ts`:
+Adicione ao `nuxt.config.ts` (deve ser o **primeiro** módulo da lista):
 
 ```ts
 export default defineNuxtConfig({
   modules: [
-    '~~/nuxt-lite/src/module',  // Deve ser o PRIMEIRO módulo
+    '~~/nuxt-lite/src/module',
   ],
   nuxtLite: {
-    optimizeCss: 'inline', // 'inline' | 'file' | false
-    safelist: ['is-active', 'menu-open'], // Classes dinâmicas a preservar
+    optimizeCss: 'inline',     // 'inline' | 'file' | false
+    safelist: ['is-active'],   // Classes a preservar no tree-shaking
   },
 })
 ```
@@ -49,35 +41,20 @@ export default defineNuxtConfig({
 
 | Opção | Padrão | Descrição |
 |---|---|---|
-| `optimizeCss` | `false` | Otimização de CSS: `true`/`'inline'` (por página) ou `'file'` (arquivo único global). |
-| `safelist` | `[]` | Lista de classes ou seletores que NÃO devem ser removidos no tree-shaking. |
-| `cleanHtml` | `true` | Remove artefatos Nuxt/Vue (`__NUXT_DATA__`, etc.) e limpa comentários SSR. |
-
-## Como Funciona
-
-### Build-time (Geração Estática)
-1. Durante o `nuxt generate`, o módulo intercepta cada página gerada.
-2. O HTML é parseado usando o **linkedom** (um parser DOM ultra-rápido para Node).
-3. O conteúdo do `<main>` é extraído e transformado em uma árvore JSON compacta (`_payload.json`).
-4. Scripts e estilos originais do Vue/Nuxt são removidos para garantir um HTML puro.
-5. O runtime `lite.js` (escrito em TypeScript) é injetado no final do `<body>`.
-
-### Client-side (Navegação)
-1. Quando um link entra na tela, o `IntersectionObserver` inicia o prefetch do JSON daquela página.
-2. Ao clicar, o runtime busca o JSON (geralmente já em cache) e reconstrói apenas o conteúdo variável.
-3. Aplica transições CSS (respeitando `.page-enter-active`, etc.).
-4. **Foco:** O runtime move o foco para o primeiro `<h1>` encontrado ou para o contêiner principal, seguindo boas práticas de acessibilidade.
+| `optimizeCss` | `false` | `'inline'`: CSS por página. `'file'`: arquivo global único. `false`: desativado. |
+| `safelist` | `[]` | Classes ou seletores que NÃO devem ser removidos. |
+| `cleanHtml` | `true` | Remove artefatos Nuxt/Vue do HTML final. |
 
 ## Estrutura de Páginas
 
-Para que a navegação funcione, envolva o conteúdo variável no seu layout principal:
+O runtime substitui o conteúdo dentro de `<main>` ou `[data-page-content]`. Envolva o conteúdo variável no layout:
 
 ```vue
 <!-- layouts/default.vue -->
 <template>
   <div>
     <header>...</header>
-    <main data-page-content> <!-- Atributo obrigatório ou tag <main> -->
+    <main data-page-content>
       <slot />
     </main>
     <footer>...</footer>
@@ -87,7 +64,7 @@ Para que a navegação funcione, envolva o conteúdo variável no seu layout pri
 
 ## Transições CSS
 
-Defina as classes de transição no seu CSS global:
+Defina as classes de transição no CSS global:
 
 ```css
 .page-enter-active, .page-leave-active {
@@ -98,10 +75,35 @@ Defina as classes de transição no seu CSS global:
 }
 ```
 
+## Como Funciona
+
+### Build-time
+1. Durante `nuxt generate`, cada página HTML é parseada com `linkedom`.
+2. O conteúdo de `<main>` é extraído e serializado em `_payload.json`.
+3. Scripts e estilos do Vue/Nuxt são removidos do HTML.
+4. O runtime buildado (`lite.min.js`) é injetado no `<body>`.
+5. O CSS é analisado para extrair apenas os seletores usados naquela página.
+
+### Client-side
+1. `IntersectionObserver` monitora links na viewport e inicia prefetch dos payloads.
+2. Ao clicar, o runtime busca o JSON e reconstrói o conteúdo.
+3. Aplica transições CSS e move o foco para acessibilidade.
+
 ## Limitações
 
-- **Apenas sites estáticos:** Projetado exclusivamente para `nuxt generate`.
-- **Sem reatividade Vue no cliente:** Como o Vue runtime é removido, componentes que dependem de `ref`, `reactive` ou eventos Vue no navegador não funcionarão. Use JavaScript puro ou Web Components para interatividades leves.
+- **Apenas estático:** Funciona somente com `nuxt generate`.
+- **Sem Vue no cliente:** Componentes com reatividade Vue não funcionam no navegador.
+- **Layouts fixos:** Header, footer e navegação devem estar fora do `<main>` para não serem substituídos.
+
+## Desenvolvimento
+
+```bash
+npm run dev              # Rodar playground em modo dev
+npm run dev:build        # Build do playground
+npm run build:runtime    # Build do runtime (esbuild)
+npm run prepack          # Build completo para publicação
+npm run test             # Rodar testes
+```
 
 ## Licença
 
