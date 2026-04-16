@@ -73,6 +73,7 @@ export interface DomStructureIssue {
   message: string
   element?: string
   path?: string
+  suggestion?: string
 }
 
 export interface DomAccessibilityIssue {
@@ -81,6 +82,7 @@ export interface DomAccessibilityIssue {
   message: string
   element?: string
   path?: string
+  suggestion?: string
 }
 
 export interface DomAnalysisResult {

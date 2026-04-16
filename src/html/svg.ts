@@ -19,7 +19,7 @@ export function processSvgs(html: string, minOccurrences: number = 2): { html: s
   // 1. First pass: scan and count occurrences by content hash
   const matches = [...html.matchAll(SVG_RE)]
   for (const match of matches) {
-    const [fullMatch, attributes, content] = match
+    const [fullMatch, attributes = '', content = ''] = match
     
     // Skip sprite container
     if (attributes.includes('id="__NUXT_LITE_SPRITE__"') || attributes.includes('data-nl-ignore')) {
@@ -44,6 +44,8 @@ export function processSvgs(html: string, minOccurrences: number = 2): { html: s
     if (count >= minOccurrences) {
       // It's a repeated SVG, move to symbols and use <use>
       const first = dataList[0]
+      if (!first) continue
+
       symbols.set(symbolId, {
         id: symbolId,
         content: first.content,

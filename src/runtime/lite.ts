@@ -124,7 +124,10 @@ interface PagePayload {
         if (n.a) {
           for (const a in n.a) {
             if (Object.prototype.hasOwnProperty.call(n.a, a)) {
-              el.setAttribute(a, n.a[a])
+              const val = n.a[a]
+              if (val !== undefined) {
+                el.setAttribute(a, val)
+              }
             }
           }
         }
@@ -167,23 +170,24 @@ interface PagePayload {
   function updateSymbols(symbols: PagePayload['symbols']) {
     if (!symbols || symbols.length === 0) return
     
-    let sprite = document.getElementById('__NUXT_LITE_SPRITE__')
+    let sprite: Element | null = document.getElementById('__NUXT_LITE_SPRITE__')
     if (!sprite) {
-      sprite = document.createElementNS(SVG_NS, 'svg')
-      sprite.id = '__NUXT_LITE_SPRITE__'
-      ;(sprite as any).style.display = 'none'
-      document.body.appendChild(sprite)
+      const s = document.createElementNS(SVG_NS, 'svg')
+      s.id = '__NUXT_LITE_SPRITE__'
+      ;(s as any).style.display = 'none'
+      document.body.appendChild(s)
+      sprite = s
     }
 
     for (let i = 0; i < symbols.length; i++) {
       const s = symbols[i]
-      if (!s || document.getElementById(s.id)) continue
+      if (!s || !sprite || document.getElementById(s.id)) continue
 
       const viewBoxMatch = s.attributes.match(/viewBox="([^"]*)"/)
       
       const symbol = document.createElementNS(SVG_NS, 'symbol')
       symbol.id = s.id
-      if (viewBoxMatch) symbol.setAttribute('viewBox', viewBoxMatch[1])
+      if (viewBoxMatch && viewBoxMatch[1]) symbol.setAttribute('viewBox', viewBoxMatch[1])
       symbol.innerHTML = s.content
       sprite.appendChild(symbol)
     }

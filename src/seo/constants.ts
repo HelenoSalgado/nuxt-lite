@@ -71,7 +71,7 @@ export interface ReplicationRule {
   sources: Array<{ type: 'title' | 'meta' | 'og' | 'twitter', key: string }>
 }
 
-export const AUTO_REPLICATE_RULES: ReplicationRule[] = Object.freeze([
+export const AUTO_REPLICATE_RULES: ReadonlyArray<ReplicationRule> = Object.freeze([
   {
     target: 'og:title',
     targetType: 'property',

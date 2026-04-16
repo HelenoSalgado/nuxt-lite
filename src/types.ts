@@ -256,7 +256,7 @@ export function resolveSeoConfig(options: ModuleOptions): { mode: SeoMode, enabl
   const mode = resolveSeoMode(options)
   const enabled = mode !== 'none'
   const baseSettings: SeoOptions = {
-    optimizeSeo: options.optimizeSeo,
+    optimizeSeo: typeof options.optimizeSeo === 'object' ? options.optimizeSeo.optimizeSeo : options.optimizeSeo,
     maxDomDepth: options.optimizeSeo && typeof options.optimizeSeo === 'object' ? options.optimizeSeo.maxDomDepth : undefined,
     autoReplicate: options.optimizeSeo && typeof options.optimizeSeo === 'object' ? options.optimizeSeo.autoReplicate ?? true : true,
     autoInject: options.optimizeSeo && typeof options.optimizeSeo === 'object' ? options.optimizeSeo.autoInject : mode === 'fix',

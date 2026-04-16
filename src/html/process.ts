@@ -2,7 +2,8 @@ import { parseHTML } from 'linkedom'
 import type { ExtendedOptions } from '../types'
 import { extractUsedSelectors } from './extract'
 import { stripExistingCss, stripVueRuntime, stripNuxtScripts } from './clean'
-import { processSvgs, generateSpriteContainer, SvgSymbol } from './svg'
+import { processSvgs, generateSpriteContainer } from './svg'
+import type { SvgSymbol } from './svg'
 import { generateColorModeScript } from './color'
 
 export interface PageProcessResult {

@@ -175,11 +175,12 @@ describe('autoInjectMissingTags', () => {
 // ============================================================================
 
 describe('processSeoMeta', () => {
-  it('analyzes mode does not inject tags', () => {
+  it('analyze mode does not modify meta or html', () => {
     const result = processSeoMeta(MINIMAL_HTML, '/', 'analyze')
-    // Should replicate but not auto-inject in analyze mode
-    expect(result.meta.og.title).toBe('Título da Página com Tamanho Adequado para Teste')
-    expect(result.meta.charset).toBeUndefined() // Not injected in analyze mode
+    // Should NOT replicate and NOT auto-inject in analyze mode
+    expect(result.meta.og.title).toBeUndefined() 
+    expect(result.meta.charset).toBeUndefined()
+    expect(result.html).toBe(MINIMAL_HTML)
   })
 
   it('fix mode injects missing tags', () => {

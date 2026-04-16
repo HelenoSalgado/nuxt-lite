@@ -102,12 +102,12 @@ export function extractMetaTags(html: string): ExtractedMeta {
 
 function validateLength(
   value: string | undefined,
-  limits: { min?: number, recommendedMin?: number, recommendedMax?: number, absoluteMax?: number },
+  limits: { min?: number, recommendedMin?: number, recommendedMax?: number, absoluteMax?: number } | undefined,
   tagName: string,
 ): SeoIssue[] {
   const issues: SeoIssue[] = []
 
-  if (!value) return issues
+  if (!value || !limits) return issues
 
   const len = value.length
 
@@ -187,7 +187,7 @@ export function analyzeMetaTags(html: string, route: string = ''): SeoReport {
     const titleLimits = META_LENGTH_LIMITS.title
     issues.push(...validateLength(meta.title, titleLimits, 'Title'))
 
-    if (meta.title.length < titleLimits.recommendedMin!) {
+    if (titleLimits?.recommendedMin && meta.title.length < titleLimits.recommendedMin) {
       // Title exists but very short
     }
   }
@@ -622,15 +622,30 @@ export interface SeoMetaResult {
 export function processSeoMeta(
   html: string,
   route: string = '',
-  mode: 'analyze' | 'fix' = 'analyze',
+  mode: 'analyze' | 'fix' | 'none' = 'analyze',
 ): SeoMetaResult {
-  // 1. Extract and analyze
+  // 1. Extract meta tags first (needed for result)
   const meta = extractMetaTags(html)
-  const report = analyzeMetaTags(html, route)
+  
+  // If mode is none, return empty report
+  if (mode === 'none') {
+    return {
+      html,
+      report: {
+        route: route || '/',
+        issues: [],
+        score: 100,
+        timestamp: new Date().toISOString()
+      },
+      meta
+    }
+  }
 
+  // 2. Full analysis
+  const report = analyzeMetaTags(html, route)
   let processedHtml = html
 
-  // 2. Auto-fix / Replication (ONLY in fix mode)
+  // 3. Auto-fix / Replication (ONLY in fix mode)
   if (mode === 'fix') {
     // a. Auto-replicate
     const replicated = replicateMissingTags(processedHtml, meta)
