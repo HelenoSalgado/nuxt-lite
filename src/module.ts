@@ -2,8 +2,9 @@ import { defineNuxtModule, createResolver } from '@nuxt/kit'
 import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync, readdirSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import type { ModuleOptions, ExtendedOptions } from './types'
-import { resolveCssMode, findOutputDir, resolveSeoConfig } from './types'
+import { resolveCssMode, findOutputDir, resolveSeoConfig, resolveSvgConfig, resolveColorConfig } from './types'
 import { processPageContent } from './html/process'
+import { generateSpriteContainer } from './html/svg'
 import { collectAllCssFiles, removeRedundantCssFiles } from './fs'
 import { parseCssRules } from './css/parser'
 import { filterCssBySelectors } from './css/filter'
@@ -26,17 +27,22 @@ export default defineNuxtModule<ModuleOptions>({
     const resolver = createResolver(import.meta.url)
     const cssMode = resolveCssMode(options)
     const seoConfig = resolveSeoConfig(options)
+    const svgConfig = resolveSvgConfig(options)
+    const colorConfig = resolveColorConfig(options)
     const extendedOptions: ExtendedOptions = {
       ...options,
       _cssMode: cssMode,
       _seoMode: seoConfig.mode,
       _seoResolved: { ...seoConfig.settings, enabled: seoConfig.enabled },
+      _svgResolved: { ...svgConfig.settings, enabled: svgConfig.enabled },
+      _colorResolved: { ...colorConfig.settings, enabled: colorConfig.enabled },
     }
 
     if (nuxt.options.dev) return
 
     const cssRules: Map<string, string> | null = null
     const globalUsedSelectors = new Set<string>()
+    const routeSymbols = new Map<string, any[]>()
     const pageManifest: Record<string, { meta: any, domSize: number }> = {}
     const seoReports = new Map<string, import('./seo/types').SeoReport>()
 
@@ -45,7 +51,7 @@ export default defineNuxtModule<ModuleOptions>({
       nitroConfig.hooks = nitroConfig.hooks || {}
 
       nitroConfig.hooks['prerender:generate'] = async (route: any) => {
-        // Only process HTML pages
+        // ... (check if HTML) ...
         if (!route || typeof route.contents !== 'string') return
         if (!route.route || route.skip) return
         if (route.route.startsWith('/_nuxt') || route.route.startsWith('/__') || route.route.startsWith('/_ipx/')) return
@@ -59,8 +65,13 @@ export default defineNuxtModule<ModuleOptions>({
         let html = route.contents as string
 
         // 1. Process Page (Clean, Inject Runtime script tag, etc.)
-        const { html: processedHtml, usedSelectors } = processPageContent(html, extendedOptions, '')
+        const { html: processedHtml, usedSelectors, symbols } = processPageContent(html, extendedOptions, '')
         html = processedHtml
+
+        // Store symbols for payload later
+        if (symbols && symbols.size > 0) {
+          routeSymbols.set(normalizedRoute, Array.from(symbols.values()))
+        }
 
         // 1b. SEO Processing (if enabled)
         if (seoConfig.enabled && !seoReports.has(normalizedRoute)) {
@@ -242,7 +253,16 @@ export default defineNuxtModule<ModuleOptions>({
         const endIdx = html.indexOf('<!--NL:SLOT_END-->')
         if (startIdx !== -1 && endIdx !== -1) {
           const slotHtml = html.substring(startIdx + '<!--NL:SLOT_START-->'.length, endIdx)
-          const payload = { dom: extractSlotContent(slotHtml), meta: extractMetaTags(html) }
+          
+          // Get symbols for this route
+          const normalizedRoute = route === '/' ? '/' : route.replace(/\/$/, '')
+          const symbols = routeSymbols.get(normalizedRoute) || []
+
+          const payload = { 
+            dom: extractSlotContent(slotHtml), 
+            meta: extractMetaTags(html),
+            symbols
+          }
 
           let payloadPath: string
           if (route === '/') {
@@ -258,6 +278,14 @@ export default defineNuxtModule<ModuleOptions>({
 
           // Remove markers from the final HTML
           html = html.replace('<!--NL:SLOT_START-->', '').replace('<!--NL:SLOT_END-->', '')
+
+          // Inject the sprite container into the final HTML (only symbols for this route)
+          if (symbols.length > 0) {
+            const symbolMap = new Map(symbols.map((s: any) => [s.id, s]))
+            const spriteContainer = generateSpriteContainer(symbolMap)
+            html = html.replace('</body>', `${spriteContainer}</body>`)
+          }
+
           writeFileSync(htmlPath, html, 'utf-8')
         }
       }

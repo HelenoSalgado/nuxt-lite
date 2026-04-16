@@ -12,11 +12,11 @@ interface NuxtLiteState {
 }
 
 interface DomNode {
-  type: 'element' | 'text' | 'comment'
-  tag?: string
-  attrs?: Record<string, string>
-  children?: DomNode[]
-  content?: string
+  t?: 'e' | 't' | 'c' // type: e=element (default), t=text, c=comment
+  g?: string          // tag (ex: div, span)
+  a?: Record<string, string> // attrs
+  c?: DomNode[]       // children
+  v?: string          // value (content para texto ou comentário)
 }
 
 interface PagePayload {
@@ -28,6 +28,7 @@ interface PagePayload {
     og?: Record<string, string>
     twitter?: Record<string, string>
   }
+  symbols?: { id: string, content: string, attributes: string }[]
 }
 
 (function () {
@@ -106,30 +107,29 @@ interface PagePayload {
       const n = nodes[i]
       if (!n) continue
 
-      if (n.type === 'text') {
-        frag.appendChild(document.createTextNode(n.content || ''))
+      const type = n.t || 'e'
+
+      if (type === 't') {
+        frag.appendChild(document.createTextNode(n.v || ''))
       }
-      else if (n.type === 'comment') {
-        frag.appendChild(document.createComment(n.content || ''))
+      else if (type === 'c') {
+        frag.appendChild(document.createComment(n.v || ''))
       }
-      else if (n.type === 'element') {
-        const tag = n.tag || 'div'
+      else {
+        const tag = n.g || 'div'
         const el = SVG_TAGS[tag]
           ? document.createElementNS(SVG_NS, tag)
           : document.createElement(tag)
 
-        if (n.attrs) {
-          for (const a in n.attrs) {
-            if (Object.prototype.hasOwnProperty.call(n.attrs, a)) {
-              const val = n.attrs[a]
-              if (val !== undefined) {
-                el.setAttribute(a, val)
-              }
+        if (n.a) {
+          for (const a in n.a) {
+            if (Object.prototype.hasOwnProperty.call(n.a, a)) {
+              el.setAttribute(a, n.a[a])
             }
           }
         }
-        if (n.children && n.children.length > 0) {
-          el.appendChild(buildDom(n.children))
+        if (n.c && n.c.length > 0) {
+          el.appendChild(buildDom(n.c))
         }
 
         frag.appendChild(el)
@@ -163,10 +163,39 @@ interface PagePayload {
     }
   }
 
+  // ===== SVG Symbols Update =====
+  function updateSymbols(symbols: PagePayload['symbols']) {
+    if (!symbols || symbols.length === 0) return
+    
+    let sprite = document.getElementById('__NUXT_LITE_SPRITE__')
+    if (!sprite) {
+      sprite = document.createElementNS(SVG_NS, 'svg')
+      sprite.id = '__NUXT_LITE_SPRITE__'
+      ;(sprite as any).style.display = 'none'
+      document.body.appendChild(sprite)
+    }
+
+    for (let i = 0; i < symbols.length; i++) {
+      const s = symbols[i]
+      if (!s || document.getElementById(s.id)) continue
+
+      const viewBoxMatch = s.attributes.match(/viewBox="([^"]*)"/)
+      
+      const symbol = document.createElementNS(SVG_NS, 'symbol')
+      symbol.id = s.id
+      if (viewBoxMatch) symbol.setAttribute('viewBox', viewBoxMatch[1])
+      symbol.innerHTML = s.content
+      sprite.appendChild(symbol)
+    }
+  }
+
   // ===== Swap =====
   function swapWithPayload(payload: PagePayload): boolean {
     const el = document.querySelector('[data-page-content]') || document.querySelector('main')
     if (!el || !payload || !payload.dom) return false
+
+    // Update symbols first so <use> can find them
+    updateSymbols(payload.symbols)
 
     const frag = buildDom(payload.dom)
 
@@ -281,7 +310,10 @@ interface PagePayload {
   function prefetchRoute(href: string) {
     if (!isNuxtPage(href)) return
     const r = normalizeHref(href)
-    if (r === state.page || prefetching.has(r)) return
+    
+    // Safety: Never prefetch current route or already prefetching
+    const currentPath = normalizeHref(location.pathname)
+    if (r === currentRoute || r === currentPath || prefetching.has(r)) return
 
     // Check for Save-Data header or slow connection
     if ((navigator as any).connection && ((navigator as any).connection.saveData || (navigator as any).connection.effectiveType.includes('2g'))) return
@@ -355,10 +387,10 @@ interface PagePayload {
     }, { passive: true })
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init)
+  if (document.readyState === 'complete') {
+    setTimeout(init, 50)
   }
   else {
-    init()
+    window.addEventListener('load', () => setTimeout(init, 50))
   }
 })()

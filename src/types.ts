@@ -48,6 +48,53 @@ export interface SeoOptions {
   writeReport?: boolean
 }
 
+export interface SvgOptions {
+  /**
+   * Enable SVG optimization by deduplicating and using sprites.
+   * @default false
+   */
+  enabled?: boolean
+
+  /**
+   * Minimum number of occurrences before a symbol is created.
+   * If 1, all SVGs are converted to symbols.
+   * @default 1
+   */
+  minOccurrences?: number
+}
+
+export interface ColorModeOptions {
+  /**
+   * Enable color mode management.
+   * @default false
+   */
+  enabled?: boolean
+  
+  /**
+   * Default preference (light, dark, or system).
+   * @default 'light'
+   */
+  preference?: 'light' | 'dark' | 'system'
+  
+  /**
+   * Fallback if preference is not available.
+   * @default 'light'
+   */
+  fallback?: 'light' | 'dark'
+  
+  /**
+   * Storage key (localStorage or cookie name).
+   * @default 'nuxt-color-mode'
+   */
+  storageKey?: string
+  
+  /**
+   * Class suffix to append (e.g. '-mode' -> 'dark-mode').
+   * @default ''
+   */
+  classSuffix?: string
+}
+
 export interface ModuleOptions {
   /**
    * Optimize CSS output.
@@ -86,6 +133,18 @@ export interface ModuleOptions {
    * Analyzes meta tags and DOM structure for best practices.
    */
   optimizeSeo?: SeoOptions | boolean | 'analyze' | 'fix'
+
+  /**
+   * SVG optimization options.
+   * Deduplicates SVGs and uses symbols to reduce DOM size.
+   */
+  optimizeSvg?: SvgOptions | boolean
+
+  /**
+   * Color mode management.
+   * Lightweight replacement for @nuxtjs/color-mode.
+   */
+  colorMode?: ColorModeOptions | boolean
 }
 
 // ============================================================================
@@ -99,6 +158,8 @@ export interface ExtendedOptions extends ModuleOptions {
   _cssMode: CssMode
   _seoMode: SeoMode
   _seoResolved: SeoOptions & { enabled: boolean }
+  _svgResolved: SvgOptions & { enabled: boolean }
+  _colorResolved: ColorModeOptions & { enabled: boolean }
 }
 
 export interface ProcessResult {
@@ -141,6 +202,7 @@ export const CLASS_RE = /\bclass=["']([^"']*)["']/g
 export const ID_RE = /\bid=["']([^"']*)["']/g
 export const DATA_RE = /\bdata-([\w-]+)=/g
 export const HTML_TAG_RE = /<([a-z][a-z0-9]*)\b[^>]*>/gi
+export const SVG_RE = /<svg\b([^>]*)>([\s\S]*?)<\/svg>/gi
 
 // ============================================================================
 // Regex patterns — HTML cleaning
@@ -202,6 +264,35 @@ export function resolveSeoConfig(options: ModuleOptions): { mode: SeoMode, enabl
     writeReport: options.optimizeSeo && typeof options.optimizeSeo === 'object' ? options.optimizeSeo.writeReport ?? true : true,
   }
   return { mode, enabled, settings: baseSettings }
+}
+
+export function resolveSvgConfig(options: ModuleOptions): { enabled: boolean, settings: SvgOptions } {
+  const svg = options.optimizeSvg
+  if (!svg) return { enabled: false, settings: {} }
+  const settings: SvgOptions = typeof svg === 'object' ? svg : { enabled: true }
+  return { 
+    enabled: settings.enabled ?? !!svg, 
+    settings: {
+      minOccurrences: settings.minOccurrences ?? 2,
+      ...settings
+    } 
+  }
+}
+
+export function resolveColorConfig(options: ModuleOptions): { enabled: boolean, settings: ColorModeOptions } {
+  const color = options.colorMode
+  if (!color) return { enabled: false, settings: {} }
+  const settings: ColorModeOptions = typeof color === 'object' ? color : { enabled: true }
+  return { 
+    enabled: settings.enabled ?? !!color, 
+    settings: {
+      preference: settings.preference ?? 'light',
+      fallback: settings.fallback ?? 'light',
+      storageKey: settings.storageKey ?? 'nuxt-color-mode',
+      classSuffix: settings.classSuffix ?? '',
+      ...settings
+    } 
+  }
 }
 
 export function findOutputDir(nuxt: Nuxt): string | null {

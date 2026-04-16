@@ -12,11 +12,11 @@
 // ============================================================================
 
 export interface DomNode {
-  type: 'element' | 'text' | 'comment'
-  tag?: string
-  attrs?: Record<string, string>
-  children?: DomNode[]
-  content?: string
+  t?: 'e' | 't' | 'c' // type: e=element (default), t=text, c=comment
+  g?: string          // tag (ex: div, span)
+  a?: Record<string, string> // attrs
+  c?: DomNode[]       // children
+  v?: string          // value (content para texto ou comentário)
 }
 
 export interface PagePayload {
@@ -208,23 +208,23 @@ function tokensToDom(tokens: HtmlToken[]): DomNode[] {
       const text = token.raw
       if (stack.length > 0) {
         const parent = stack[stack.length - 1]!
-        if (!parent.children) parent.children = []
+        if (!parent.c) parent.c = []
         if (text.trim().length > 0 || text.length <= 2) {
-          parent.children.push({ type: 'text', content: text })
+          parent.c.push({ t: 't', v: text })
         }
       }
       else if (text.trim().length > 0) {
-        root.push({ type: 'text', content: text })
+        root.push({ t: 't', v: text })
       }
       continue
     }
 
     if (token.type === 'comment') {
-      const node: DomNode = { type: 'comment', content: token.raw.slice(4, -3) }
+      const node: DomNode = { t: 'c', v: token.raw.slice(4, -3) }
       if (stack.length > 0) {
         const parent = stack[stack.length - 1]!
-        if (!parent.children) parent.children = []
-        parent.children.push(node)
+        if (!parent.c) parent.c = []
+        parent.c.push(node)
       }
       else {
         root.push(node)
@@ -236,21 +236,33 @@ function tokensToDom(tokens: HtmlToken[]): DomNode[] {
 
     if (token.type === 'tag-open') {
       const tagName = token.tagName!
-      const node: DomNode = { type: 'element', tag: tagName, attrs: token.attrs || {}, children: [] }
+      const node: DomNode = { g: tagName }
+      if (token.attrs && Object.keys(token.attrs).length > 0) node.a = token.attrs
 
       if (VOID_TAGS.has(tagName)) {
-        if (stack.length > 0) stack[stack.length - 1]!.children!.push(node)
+        if (stack.length > 0) {
+          const parent = stack[stack.length - 1]!
+          if (!parent.c) parent.c = []
+          parent.c!.push(node)
+        }
         else root.push(node)
       }
       else {
+        node.c = [] // Inicia children para tags não-void
         stack.push(node)
       }
       continue
     }
 
     if (token.type === 'self-close') {
-      const node: DomNode = { type: 'element', tag: token.tagName!, attrs: token.attrs || {} }
-      if (stack.length > 0) stack[stack.length - 1]!.children!.push(node)
+      const node: DomNode = { g: token.tagName! }
+      if (token.attrs && Object.keys(token.attrs).length > 0) node.a = token.attrs
+
+      if (stack.length > 0) {
+        const parent = stack[stack.length - 1]!
+        if (!parent.c) parent.c = []
+        parent.c!.push(node)
+      }
       else root.push(node)
       continue
     }
@@ -259,10 +271,17 @@ function tokensToDom(tokens: HtmlToken[]): DomNode[] {
       const tagName = token.tagName!
       let idx = stack.length - 1
       while (idx >= 0) {
-        if (stack[idx]!.tag === tagName) {
+        if (stack[idx]!.g === tagName) {
           const node = stack[idx]!
+          // Otimização: remove array de children se estiver vazio
+          if (node.c && node.c.length === 0) delete node.c
+          
           stack.splice(idx)
-          if (stack.length > 0) stack[stack.length - 1]!.children!.push(node)
+          if (stack.length > 0) {
+            const parent = stack[stack.length - 1]!
+            if (!parent.c) parent.c = []
+            parent.c!.push(node)
+          }
           else root.push(node)
           break
         }
@@ -337,16 +356,17 @@ export function serializePage(html: string): PagePayload {
 export function domToHtml(nodes: DomNode[]): string {
   let html = ''
   for (const node of nodes) {
-    if (node.type === 'text') html += node.content || ''
-    else if (node.type === 'comment') html += `<!--${node.content || ''}-->`
-    else if (node.type === 'element') {
-      const attrs = node.attrs ? formatAttrs(node.attrs) : ''
-      const tag = node.tag || 'div'
+    const type = node.t || 'e'
+    if (type === 't') html += node.v || ''
+    else if (type === 'c') html += `<!--${node.v || ''}-->`
+    else if (type === 'e') {
+      const attrs = node.a ? formatAttrs(node.a) : ''
+      const tag = node.g || 'div'
       if (VOID_TAGS.has(tag)) {
         html += `<${tag}${attrs}>`
       }
       else {
-        const children = node.children ? domToHtml(node.children) : ''
+        const children = node.c ? domToHtml(node.c) : ''
         html += `<${tag}${attrs}>${children}</${tag}>`
       }
     }
