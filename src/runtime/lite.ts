@@ -52,7 +52,7 @@ interface PagePayload {
           subs.get('*')?.forEach(fn => fn(v, o))
         }
         return true
-      }
+      },
     })
   }
 
@@ -87,7 +87,8 @@ interface PagePayload {
     try {
       const r = await fetch(url, { headers: { Accept: 'application/json' } })
       return r.ok ? r.json() : null
-    } catch (e) {
+    }
+    catch (e) {
       console.error('[nuxt-lite] fetch error:', e)
       return null
     }
@@ -95,7 +96,7 @@ interface PagePayload {
 
   // ===== DOM Reconstruction =====
   const SVG_NS = 'http://www.w3.org/2000/svg'
-  const SVG_TAGS: Record<string, number> = { svg:1,path:1,circle:1,rect:1,line:1,polyline:1,polygon:1,ellipse:1,g:1,use:1,text:1,tspan:1,textPath:1,defs:1,clipPath:1,mask:1,filter:1,linearGradient:1,radialGradient:1,stop:1,marker:1,pattern:1,image:1,foreignObject:1,desc:1,title:1,animate:1,animateTransform:1,animateMotion:1,set:1,mpath:1,view:1,script:1,style:1,symbol:1 }
+  const SVG_TAGS: Record<string, number> = { svg: 1, path: 1, circle: 1, rect: 1, line: 1, polyline: 1, polygon: 1, ellipse: 1, g: 1, use: 1, text: 1, tspan: 1, textPath: 1, defs: 1, clipPath: 1, mask: 1, filter: 1, linearGradient: 1, radialGradient: 1, stop: 1, marker: 1, pattern: 1, image: 1, foreignObject: 1, desc: 1, title: 1, animate: 1, animateTransform: 1, animateMotion: 1, set: 1, mpath: 1, view: 1, script: 1, style: 1, symbol: 1 }
 
   function buildDom(nodes: DomNode[]): DocumentFragment {
     const frag = document.createDocumentFragment()
@@ -107,12 +108,14 @@ interface PagePayload {
 
       if (n.type === 'text') {
         frag.appendChild(document.createTextNode(n.content || ''))
-      } else if (n.type === 'comment') {
+      }
+      else if (n.type === 'comment') {
         frag.appendChild(document.createComment(n.content || ''))
-      } else if (n.type === 'element') {
+      }
+      else if (n.type === 'element') {
         const tag = n.tag || 'div'
-        const el = SVG_TAGS[tag] 
-          ? document.createElementNS(SVG_NS, tag) 
+        const el = SVG_TAGS[tag]
+          ? document.createElementNS(SVG_NS, tag)
           : document.createElement(tag)
 
         if (n.attrs) {
@@ -139,7 +142,7 @@ interface PagePayload {
   function updateMeta(meta: PagePayload['meta']) {
     if (!meta) return
     if (meta.title) document.title = meta.title
-    
+
     const setMeta = (selector: string, content?: string) => {
       if (!content) return
       const el = document.querySelector(selector) as HTMLMetaElement | HTMLLinkElement
@@ -151,7 +154,7 @@ interface PagePayload {
 
     setMeta('meta[name="description"]', meta.description)
     setMeta('link[rel="canonical"]', meta.canonical)
-    
+
     if (meta.og) {
       for (const p in meta.og) setMeta(`meta[property="og:${p}"]`, meta.og[p])
     }
@@ -164,21 +167,22 @@ interface PagePayload {
   function swapWithPayload(payload: PagePayload): boolean {
     const el = document.querySelector('[data-page-content]') || document.querySelector('main')
     if (!el || !payload || !payload.dom) return false
-    
+
     const frag = buildDom(payload.dom)
-    
+
     // Efficiently swap content
     while (el.firstChild) el.removeChild(el.firstChild)
     el.appendChild(frag)
-    
+
     updateMeta(payload.meta)
-    
+
     // A11y: Reset focus and announced change
     const h1 = el.querySelector('h1')
     if (h1) {
       h1.tabIndex = -1
       h1.focus({ preventScroll: true })
-    } else {
+    }
+    else {
       (el as HTMLElement).tabIndex = -1
       ;(el as HTMLElement).focus({ preventScroll: true })
     }
@@ -191,12 +195,12 @@ interface PagePayload {
     if (transitionMs > 0) return transitionMs
     const el = document.querySelector('.page-enter-active, .page-leave-active')
     if (!el) return 400
-    
+
     const style = getComputedStyle(el)
     const dur = style.transitionDuration || style.animationDuration
     if (!dur || dur === '0s') return 400
-    
-    const ms = parseFloat(dur)
+
+    const ms = Number.parseFloat(dur)
     transitionMs = dur.includes('ms') ? ms : ms * 1000
     return transitionMs || 400
   }
@@ -206,10 +210,10 @@ interface PagePayload {
     if (navigating) return
     const route = normalizeHref(href)
     if (route === currentRoute && updateHistory) return
-    
+
     navigating = true
     const el = document.querySelector('[data-page-content]') || document.querySelector('main')
-    
+
     if (!el || !isNuxtPage(href)) {
       window.location.href = href
       return
@@ -217,7 +221,7 @@ interface PagePayload {
 
     try {
       const ms = getTransitionMs()
-      
+
       // Phase 1: Exit Transition
       el.classList.add('page-leave-active', 'page-leave-from')
       void (el as HTMLElement).offsetHeight // Trigger reflow
@@ -231,12 +235,13 @@ interface PagePayload {
       // Wait for animation AND data
       const [payload] = await Promise.all([
         payloadPromise,
-        new Promise(r => setTimeout(r, ms))
+        new Promise(r => setTimeout(r, ms)),
       ])
 
       if (payload && payload.dom) {
         swapWithPayload(payload)
-      } else {
+      }
+      else {
         // Fallback: Full reload if payload fails
         window.location.href = href
         return
@@ -252,12 +257,13 @@ interface PagePayload {
       void (el as HTMLElement).offsetHeight
       el.classList.remove('page-enter-from')
       el.classList.add('page-enter-to')
-      
+
       await new Promise(r => setTimeout(r, ms))
       el.classList.remove('page-enter-active', 'page-enter-to')
-      
+
       window.scrollTo({ top: 0, behavior: 'instant' as any })
-    } catch (err) {
+    }
+    catch (err) {
       console.error('[nuxt-lite] navigate error:', err)
       window.location.href = href
     }
@@ -351,8 +357,8 @@ interface PagePayload {
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init)
-  } else {
+  }
+  else {
     init()
   }
-
 })()

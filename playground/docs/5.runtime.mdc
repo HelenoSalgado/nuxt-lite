@@ -1,0 +1,436 @@
+---
+title: 'Runtime JavaScript'
+description: 'Como o runtime leve de ~5KB funciona no navegador do cliente'
+navigation:
+  title: 'Runtime JS'
+  icon: '⚡'
+---
+
+# Runtime JavaScript
+
+O nuxt-lite substitui o Vue runtime (~500KB) por um script mínimo (~5KB) que gerencia toda a navegação SPA no cliente.
+
+---
+
+## Visão Geral
+
+```
+Vue Runtime:    ~500KB min+gzip
+nuxt-lite:        ~5KB min+gzip
+Redução:          ~99%
+```
+
+O runtime é um arquivo IIFE (`lite.min.js`) que:
+
+1. Intercepta cliques em links
+2. Faz prefetch de payloads JSON
+3. Reconstrói o DOM a partir do JSON
+4. Aplica transições CSS
+5. Gerencia foco para acessibilidade
+
+---
+
+## Inicialização
+
+Ao carregar a página, o runtime é executado automaticamente:
+
+```js
+// lite.min.js
+(function () {
+  'use strict'
+
+  // Estado global
+  const state = {
+    cache: new Map(),    // payloads prefetchados
+    currentRoute: '/',   // rota atual
+    prefetching: new Set(), // links sendo prefetchados
+    observers: new Map(),   // IntersectionObservers
+  }
+
+  // Inicialização
+  document.addEventListener('DOMContentLoaded', () => {
+    initNavigation()
+    initPrefetch()
+  })
+})()
+```
+
+---
+
+## Interceptação de Links
+
+O runtime intercepta todos os cliques em `<a>`:
+
+```js
+function initNavigation() {
+  document.addEventListener('click', (e) => {
+    const link = e.target.closest('a')
+    if (!link) return
+
+    const href = link.getAttribute('href')
+    if (!isInternal(href)) return
+
+    e.preventDefault()
+    navigateTo(href)
+  })
+}
+```
+
+### Critérios de Interceptação
+
+| Intercepta? | Exemplo | Motivo |
+|---|---|---|
+| ✅ Sim | `/sobre` | Link interno |
+| ✅ Sim | `/blog/post` | Link interno |
+| ❌ Não | `https://externo.com` | Link externo |
+| ❌ Não | `#section` | Âncora |
+| ❌ Não | `/admin` | Sem payload |
+| ❌ Não | `mailto:foo@bar.com` | Protocolo especial |
+
+---
+
+## Prefetch com IntersectionObserver
+
+O runtime monitora links que entram na viewport:
+
+```js
+function initPrefetch() {
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (entry.isIntersecting) {
+        const link = entry.target
+        const href = link.getAttribute('href')
+        prefetchPayload(href)
+        observer.unobserve(link)
+      }
+    })
+  }, {
+    rootMargin: '50px', // começa 50px antes
+    threshold: 0,
+  })
+
+  // Observar todos os links internos
+  document.querySelectorAll('a[href^="/"]').forEach(link => {
+    observer.observe(link)
+  })
+}
+```
+
+### Fluxo de Prefetch
+
+```
+┌─────────────────────────────────────┐
+│  Link entra na viewport              │
+│  <a href="/sobre">Sobre</a>          │
+└─────────────────────────────────────┘
+              ↓
+  IntersectionObserver dispara
+              ↓
+  Fetch GET /sobre/_payload.json
+              ↓
+  Payload armazenado em cache
+              ↓
+  Pronto para navegação instantânea
+```
+
+---
+
+## Navegação SPA
+
+Ao clicar em um link:
+
+```js
+async function navigateTo(route) {
+  // 1. Transição de saída
+  const main = document.querySelector('main')
+  main.classList.add('page-leave-active')
+  main.classList.add('page-leave-from')
+
+  // 2. Buscar payload (cache ou fetch)
+  const payload = await fetchPayload(route)
+
+  // 3. Reconstruir DOM
+  const newContent = domToHtml(payload.dom)
+  main.innerHTML = newContent
+
+  // 4. Atualizar URL
+  history.pushState({}, '', route)
+
+  // 5. Transição de entrada
+  main.classList.remove('page-leave-from')
+  main.classList.add('page-enter-from')
+
+  requestAnimationFrame(() => {
+    main.classList.remove('page-enter-from')
+    main.classList.add('page-enter-active')
+  })
+
+  // 6. Atualizar título
+  document.title = payload.meta.title || document.title
+
+  // 7. Mover foco (acessibilidade)
+  focusMainContent()
+}
+```
+
+---
+
+## Reconstrução do DOM
+
+O payload JSON é convertido de volta para HTML:
+
+```js
+function domToHtml(nodes) {
+  return nodes.map(node => {
+    if (node.type === 'text') return node.content
+    if (node.type === 'comment') return `<!--${node.content}-->`
+
+    if (node.type === 'element') {
+      const tag = node.tag
+      const attrs = formatAttrs(node.attrs)
+      const children = domToHtml(node.children || [])
+
+      if (VOID_TAGS.has(tag)) {
+        return `<${tag}${attrs}>`
+      }
+      return `<${tag}${attrs}>${children}</${tag}>`
+    }
+  }).join('')
+}
+```
+
+### Correção de viewBox
+
+O servidor entrega `viewbox` (lowercase). O runtime corrige para `viewBox`:
+
+```js
+// JSON do servidor
+{ "tag": "svg", "attrs": { "viewbox": "0 0 100 100" } }
+
+// HTML reconstruído
+<svg viewBox="0 0 100 100">
+```
+
+---
+
+## Cache de Payloads
+
+O runtime mantém um cache em memória:
+
+```js
+const cache = new Map()
+
+async function fetchPayload(route) {
+  // Verificar cache primeiro
+  if (cache.has(route)) {
+    return cache.get(route)
+  }
+
+  // Fetch do payload
+  const response = await fetch(`${route}_payload.json`)
+  const payload = await response.json()
+
+  // Armazenar em cache
+  cache.set(route, payload)
+  return payload
+}
+```
+
+---
+
+## Acessibilidade
+
+### Gerenciamento de Foco
+
+Após cada navegação, o foco é movido para o conteúdo principal:
+
+```js
+function focusMainContent() {
+  // Tentar focar no h1 primeiro
+  const h1 = document.querySelector('main h1')
+  if (h1) {
+    h1.setAttribute('tabindex', '-1')
+    h1.focus()
+    return
+  }
+
+  // Fallback: focar no container principal
+  const main = document.querySelector('main')
+  if (main) {
+    main.setAttribute('tabindex', '-1')
+    main.focus()
+  }
+}
+```
+
+### Anúncio para Screen Readers
+
+```js
+// Criar live region
+const liveRegion = document.createElement('div')
+liveRegion.setAttribute('aria-live', 'polite')
+liveRegion.setAttribute('aria-atomic', 'true')
+liveRegion.style.cssText = 'position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)'
+document.body.appendChild(liveRegion)
+
+// Anunciar navegação
+function announceNavigation(title) {
+  liveRegion.textContent = `Navegou para: ${title}`
+}
+```
+
+---
+
+## Histórico do Browser
+
+O runtime integra com a History API:
+
+```js
+// Navegação por clique
+history.pushState({}, '', route)
+
+// Navegação por back/forward
+window.addEventListener('popstate', (e) => {
+  navigateTo(window.location.pathname)
+})
+```
+
+---
+
+## Transições CSS
+
+O runtime usa as classes padrão do Nuxt:
+
+```css
+.page-enter-active,
+.page-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.page-enter-from,
+.page-leave-to {
+  opacity: 0;
+}
+```
+
+### Ciclo de Transição
+
+```
+Estado       | Classes aplicadas
+-------------|-------------------------------------------
+Antes        | (nenhuma)
+Leave start  | page-leave-active page-leave-from
+Leave end    | page-leave-active page-leave-to
+Swap         | (troca de conteúdo)
+Enter start  | page-enter-active page-enter-from
+Enter end    | page-enter-active page-enter-to
+Final        | (nenhuma)
+```
+
+---
+
+## Limitações do Runtime
+
+### O que funciona
+
+| Feature | Suporte |
+|---|---|
+| Navegação SPA | ✅ |
+| Transições CSS | ✅ |
+| Prefetch | ✅ |
+| Histórico (back/forward) | ✅ |
+| Foco automático | ✅ |
+| Atualização de título | ✅ |
+| SVG com viewBox | ✅ |
+
+### O que NÃO funciona
+
+| Feature | Motivo |
+|---|---|
+| Componentes Vue | Sem runtime Vue |
+| `ref`/`reactive` | Sem Vue no cliente |
+| Computed properties | Sem Vue no cliente |
+| Watchers | Sem Vue no cliente |
+
+---
+
+## Alternativas para Interatividade
+
+### JavaScript Puro
+
+```vue
+<template>
+  <main data-page-content>
+    <button id="toggle">Mostrar/Ocultar</button>
+    <div id="content" style="display:none">
+      <p>Conteúdo toggle</p>
+    </div>
+  </main>
+</template>
+
+<script setup>
+if (import.meta.client) {
+  document.addEventListener('DOMContentLoaded', () => {
+    const btn = document.getElementById('toggle')
+    const content = document.getElementById('content')
+    btn?.addEventListener('click', () => {
+      content!.style.display = content!.style.display === 'none' ? 'block' : 'none'
+    })
+  })
+}
+</script>
+```
+
+### Web Components
+
+```vue
+<template>
+  <main data-page-content>
+    <my-counter></my-counter>
+  </main>
+</template>
+
+<script setup>
+if (import.meta.client && !customElements.get('my-counter')) {
+  class MyCounter extends HTMLElement {
+    connectedCallback() {
+      let count = 0
+      this.innerHTML = `
+        <p>Count: <span id="c">${count}</span></p>
+        <button id="inc">+</button>
+      `
+      this.querySelector('#inc')?.addEventListener('click', () => {
+        count++
+        this.querySelector('#c')!.textContent = count
+      })
+    }
+  }
+  customElements.define('my-counter', MyCounter)
+}
+</script>
+```
+
+---
+
+## Tamanho do Runtime
+
+```
+Arquivo          | Size  | Gzip
+-----------------|-------|------
+lite.min.js      | ~12KB | ~5KB
+```
+
+Comparado ao Vue runtime:
+
+```
+Arquivo          | Size   | Gzip
+-----------------|--------|-------
+vue.runtime.js   | ~400KB | ~130KB
+nuxt-lite        | ~12KB  | ~5KB
+```
+
+---
+
+::callout{type="tip"}
+O runtime é automaticamente injetado no HTML durante o build. Não é necessário importá-lo manualmente.
+::

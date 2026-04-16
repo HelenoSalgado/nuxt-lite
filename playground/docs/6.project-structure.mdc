@@ -1,0 +1,360 @@
+---
+title: 'Estrutura do Projeto'
+description: 'Organização de arquivos, módulos e como contribuir com o desenvolvimento'
+navigation:
+  title: 'Estrutura'
+  icon: '📁'
+---
+
+# Estrutura do Projeto
+
+## Organização de Arquivos
+
+```
+nuxt-lite/
+├── src/                      # Código fonte do módulo
+│   ├── module.ts             # Entry point — define o módulo Nuxt
+│   ├── types.ts              # Interfaces e tipos TypeScript
+│   ├── index.ts              # Export público
+│   │
+│   ├── html/                 # Processamento de HTML
+│   │   ├── process.ts        # Pipeline principal de processamento
+│   │   ├── serialize.ts      # Serialização HTML → JSON
+│   │   ├── extract.ts        # Extração de seletores usados
+│   │   └── clean.ts          # Limpeza de artefatos Nuxt/Vue
+│   │
+│   ├── css/                  # Otimização de CSS
+│   │   ├── parser.ts         # Parser de regras CSS
+│   │   ├── filter.ts         # Tree-shaking de seletores
+│   │   └── extract.ts        # Extração de classes do HTML
+│   │
+│   ├── fs/                   # Utilitários de filesystem
+│   │   └── index.ts          # Coleta de arquivos CSS
+│   │
+│   ├── seo/                  # Análise SEO (novo)
+│   │   ├── metatags.ts       # Análise e correção de metatags
+│   │   ├── dom-analysis.ts   # Análise estrutural do DOM
+│   │   ├── report.ts         # Geração de relatórios
+│   │   ├── constants.ts      # Constantes e regras de validação
+│   │   └── types.ts          # Tipos específicos de SEO
+│   │
+│   └── runtime/              # Runtime do cliente
+│       └── lite.ts           # Script ~5KB para navegação SPA
+│
+├── playground/               # App de desenvolvimento
+│   ├── pages/                # Páginas de exemplo
+│   │   ├── index.vue         # Home page
+│   │   ├── sobre.vue         # Página sobre
+│   │   └── contato.vue       # Página de contato
+│   ├── docs/                 # Documentação MDC
+│   │   ├── 0.index.mdc
+│   │   ├── 1.installation.mdc
+│   │   ├── 2.how-it-works.mdc
+│   │   ├── 3.seo.mdc
+│   │   ├── 4.css-optimization.mdc
+│   │   └── 5.runtime.mdc
+│   ├── app.vue               # Layout raiz
+│   ├── nuxt.config.ts        # Configuração do playground
+│   └── package.json
+│
+├── test/                     # Testes
+│   ├── basic.test.ts         # Teste E2E básico
+│   └── seo/                  # Testes de SEO
+│       ├── metatags.test.ts
+│       ├── dom-analysis.test.ts
+│       └── report.test.ts
+│
+├── package.json              # Configuração do módulo
+├── tsconfig.json             # Configuração TypeScript
+├── eslint.config.mjs         # Configuração ESLint
+└── README.md                 # Documentação principal
+```
+
+---
+
+## Módulos Internos
+
+### `src/module.ts`
+
+O entry point do módulo. Define:
+
+- Configuração do módulo Nuxt
+- Hooks de build (`nitro:config`, `close`)
+- Orquestração de todos os sub-módulos
+
+```ts
+export default defineNuxtModule<ModuleOptions>({
+  meta: { name: 'nuxt-lite', configKey: 'nuxtLite' },
+  defaults: { optimizeCss: false, cleanHtml: true, safelist: [] },
+  setup(options, nuxt) {
+    // Hooks de build
+    nuxt.hook('nitro:config', (config) => { ... })
+    nuxt.hook('close', async () => { ... })
+  },
+})
+```
+
+---
+
+### `src/types.ts`
+
+Interfaces TypeScript e utilitários:
+
+- `ModuleOptions` — opções de configuração públicas
+- `ExtendedOptions` — opções internas com modos resolvidos
+- `ESSENTIAL_SELECTORS` — seletores sempre preservados
+- Regex patterns para parsing
+- Funções helper: `resolveCssMode`, `resolveSeoMode`
+
+---
+
+### `src/html/`
+
+Processamento de HTML durante o build:
+
+#### `process.ts`
+
+Pipeline principal que:
+
+1. Extrai seletores CSS usados
+2. Remove CSS existente (se otimização ativada)
+3. Remove scripts Vue/Nuxt
+4. Injeta runtime script
+5. Retorna HTML processado + seletores
+
+#### `serialize.ts`
+
+Serialização HTML → JSON:
+
+- Tokenizer HTML customizado
+- Parser de atributos (com correção de `viewBox`)
+- Construção de árvore DOM
+- Extração de metatags
+
+#### `extract.ts`
+
+Extração de classes/IDs do HTML:
+
+- Regex para `class="..."`
+- Regex para `id="..."`
+- Regex para `data-*`
+
+#### `clean.ts`
+
+Limpeza de artefatos:
+
+- Remove tags `<style>` existentes
+- Remove scripts Vue runtime
+- Remove `modulepreload`
+- Remove `__NUXT_DATA__`
+
+---
+
+### `src/css/`
+
+Otimização de CSS:
+
+#### `parser.ts`
+
+Parser de regras CSS:
+
+- Remove comentários
+- Separa regras por seletor
+- Preserva `@font-face`, `@keyframes`
+- Ignora `@import`, `@charset`
+
+#### `filter.ts`
+
+Tree-shaking de seletores:
+
+- Compara seletores com lista de usados
+- Mantém apenas regras usadas
+- Reconstrói CSS filtrado
+
+---
+
+### `src/seo/`
+
+Análise SEO e acessibilidade:
+
+#### `metatags.ts`
+
+- Extração de todas as metatags
+- Validação de presença e tamanho
+- Detecção de tags depreciadas
+- Replicação automática
+- Injeção de tags faltantes
+
+#### `dom-analysis.ts`
+
+- Análise de profundidade do DOM
+- Hierarquia de headings
+- Aninhamentos inválidos
+- Acessibilidade (alt, labels, etc.)
+
+#### `report.ts`
+
+- Formatação de relatórios
+- Consolidação multi-página
+- Output colorido no console
+- Salvamento em JSON
+
+#### `constants.ts`
+
+- Listas de tags essenciais
+- Tags depreciadas
+- Regras de replicação
+- Limites de tamanho
+- Regras de aninhamento inválido
+
+---
+
+### `src/runtime/lite.ts`
+
+Runtime do cliente (~5KB):
+
+- Gerenciamento de rotas
+- IntersectionObserver + prefetch
+- Reconstrução de DOM a partir de JSON
+- Transições CSS
+- Gerenciamento de foco
+- History API integration
+
+---
+
+## Fluxo de Build
+
+```
+nuxt generate
+      ↓
+┌─────────────────────┐
+│  Nuxt gera HTML SSR  │
+└────────┬────────────┘
+         ↓
+┌─────────────────────────────────────┐
+│  hook: nitro:config                  │
+│  prerender:generate                  │
+│                                      │
+│  1. processPageContent()             │
+│     ├─ extractUsedSelectors()        │
+│     ├─ stripExistingCss()            │
+│     ├─ stripVueRuntime()             │
+│     └─ stripNuxtScripts()            │
+│                                      │
+│  2. SEO (se ativado)                 │
+│     ├─ processSeoMeta()              │
+│     └─ analyzeDom()                  │
+│                                      │
+│  3. serializePage()                  │
+│     └─ HTML → _payload.json          │
+└────────┬────────────────────────────┘
+         ↓
+┌─────────────────────────────────────┐
+│  hook: close                        │
+│                                      │
+│  1. Copiar runtime lite.min.js       │
+│  2. CSS optimization                 │
+│     ├─ collectAllCssFiles()          │
+│     ├─ parseCssRules()               │
+│     └─ filterCssBySelectors()        │
+│  3. Salvar payloads                  │
+│  4. Salvar manifest.json             │
+│  5. SEO report (se ativado)          │
+│     └─ printAndSaveReports()         │
+└─────────────────────────────────────┘
+```
+
+---
+
+## Desenvolvimento
+
+### Comandos Disponíveis
+
+```bash
+# Desenvolvimento
+npm run dev              # Rodar playground em modo dev
+npm run dev:build        # Build do playground
+
+# Build
+npm run build:runtime    # Build do runtime (esbuild)
+npm run prepack          # Build completo para publicação
+
+# Testes
+npm run test             # Rodar testes
+npm run test:watch       # Testes em modo watch
+npm run test:types       # Verificação de tipos
+
+# Qualidade
+npm run lint             # ESLint
+```
+
+---
+
+### Adicionando uma Nova Feature
+
+1. **Criar arquivo** no diretório apropriado (`src/html/`, `src/css/`, `src/seo/`)
+2. **Exportar funções** do arquivo
+3. **Integrar no module.ts** no hook apropriado
+4. **Adicionar tipos** em `src/types.ts`
+5. **Criar testes** em `test/`
+6. **Atualizar README.md**
+
+### Exemplo: Adicionando um novo validador
+
+```ts
+// src/seo/new-validator.ts
+export function validateSomething(html: string): SeoIssue[] {
+  const issues: SeoIssue[] = []
+  // Lógica de validação
+  return issues
+}
+
+// src/seo/metatags.ts
+import { validateSomething } from './new-validator'
+
+export function analyzeMetaTags(html: string): SeoReport {
+  // ...
+  issues.push(...validateSomething(html))
+  // ...
+}
+```
+
+---
+
+## Convenções de Código
+
+- **TypeScript** estrito
+- **ESLint** com config do `@nuxt/eslint-config`
+- **Single quotes** para strings
+- **Semicolons** opcionais (padrão do projeto)
+- **Trailing commas** em objetos/arrays multi-line
+- **Arrow parens** sempre com parênteses
+
+---
+
+## Publicação
+
+```bash
+# Preparar para publicação
+npm run prepack
+
+# Publicar (release completo)
+npm run release
+# = lint + test + prepack + changelog + publish + push
+```
+
+O `package.json` configura:
+
+```json
+{
+  "main": "./dist/module.mjs",
+  "types": "./dist/types.d.mts",
+  "files": ["dist"]
+}
+```
+
+---
+
+::callout{type="info"}
+O playground usa o módulo local via `'../src/module'` em vez do pacote publicado. Isso permite desenvolvimento e teste sem publicar.
+::

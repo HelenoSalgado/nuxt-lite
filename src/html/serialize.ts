@@ -102,7 +102,8 @@ function tokenize(html: string): HtmlToken[] {
       const tagMatch = tagRaw.match(/^<([a-z][a-z0-9]*)\b([\s\S]*?)\/>$/i)
       if (tagMatch) {
         tokens.push({ type: 'self-close', tagName: tagMatch[1]!.toLowerCase(), raw: tagRaw, attrs: parseAttrs(tagMatch[2] || '') })
-      } else {
+      }
+      else {
         tokens.push({ type: 'text', raw: tagRaw })
       }
       continue
@@ -113,7 +114,8 @@ function tokenize(html: string): HtmlToken[] {
       const tagMatch = tagRaw.match(/^<\/([a-z][a-z0-9]*)\s*>$/i)
       if (tagMatch) {
         tokens.push({ type: 'tag-close', tagName: tagMatch[1]!.toLowerCase(), raw: tagRaw })
-      } else {
+      }
+      else {
         tokens.push({ type: 'text', raw: tagRaw })
       }
       continue
@@ -123,7 +125,8 @@ function tokenize(html: string): HtmlToken[] {
     const tagMatch = tagRaw.match(/^<([a-z][a-z0-9]*)\b([\s\S]*)>$/i)
     if (tagMatch) {
       tokens.push({ type: 'tag-open', tagName: tagMatch[1]!.toLowerCase(), raw: tagRaw, attrs: parseAttrs(tagMatch[2] || '') })
-    } else {
+    }
+    else {
       tokens.push({ type: 'text', raw: tagRaw })
     }
   }
@@ -137,7 +140,7 @@ function tokenize(html: string): HtmlToken[] {
 
 function parseAttrs(attrString: string): Record<string, string> {
   const attrs: Record<string, string> = {}
-  const attrRe = /([a-zA-Z][a-zA-Z0-9_-]*)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|(\S+)))?/gi
+  const attrRe = /([a-z][\w-]*)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|(\S+)))?/gi
   let match
 
   while ((match = attrRe.exec(attrString)) !== null) {
@@ -181,10 +184,10 @@ function decodeEntities(str: string): string {
   return str
     .replace(/&amp;/g, '&')
     .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
+    .replace(/&#39;/g, '\'')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
-    .replace(/&#(\d+);/g, (_, num) => String.fromCharCode(parseInt(num, 10)))
+    .replace(/&#(\d+);/g, (_, num) => String.fromCharCode(Number.parseInt(num, 10)))
 }
 
 // ============================================================================
@@ -209,7 +212,8 @@ function tokensToDom(tokens: HtmlToken[]): DomNode[] {
         if (text.trim().length > 0 || text.length <= 2) {
           parent.children.push({ type: 'text', content: text })
         }
-      } else if (text.trim().length > 0) {
+      }
+      else if (text.trim().length > 0) {
         root.push({ type: 'text', content: text })
       }
       continue
@@ -221,7 +225,8 @@ function tokensToDom(tokens: HtmlToken[]): DomNode[] {
         const parent = stack[stack.length - 1]!
         if (!parent.children) parent.children = []
         parent.children.push(node)
-      } else {
+      }
+      else {
         root.push(node)
       }
       continue
@@ -236,7 +241,8 @@ function tokensToDom(tokens: HtmlToken[]): DomNode[] {
       if (VOID_TAGS.has(tagName)) {
         if (stack.length > 0) stack[stack.length - 1]!.children!.push(node)
         else root.push(node)
-      } else {
+      }
+      else {
         stack.push(node)
       }
       continue
@@ -338,7 +344,8 @@ export function domToHtml(nodes: DomNode[]): string {
       const tag = node.tag || 'div'
       if (VOID_TAGS.has(tag)) {
         html += `<${tag}${attrs}>`
-      } else {
+      }
+      else {
         const children = node.children ? domToHtml(node.children) : ''
         html += `<${tag}${attrs}>${children}</${tag}>`
       }

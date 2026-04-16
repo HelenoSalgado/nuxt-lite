@@ -1,0 +1,290 @@
+---
+title: 'SEO Analysis'
+description: 'Análise automática de metatags e estrutura do DOM para melhores práticas de SEO'
+navigation:
+  title: 'SEO'
+  icon: '🔍'
+---
+
+# SEO Analysis
+
+O módulo `optimizeSeo` analisa e corrige automaticamente problemas de SEO e acessibilidade durante o build.
+
+---
+
+## Ativação
+
+```ts [nuxt.config.ts]
+export default defineNuxtConfig({
+  nuxtLite: {
+    optimizeSeo: true, // ou 'analyze' | 'fix'
+  },
+})
+```
+
+### Modos
+
+| Valor | Comportamento |
+|---|---|
+| `false` | Desativado (padrão) |
+| `true` / `'analyze'` | Analisa e reporta issues no console |
+| `'fix'` | Auto-corrige issues + reporta |
+
+---
+
+## Análise de Metatags
+
+### Verificação de Presença
+
+O módulo verifica se as seguintes metatags estão presentes:
+
+#### Essenciais
+- `<title>` — título da página
+- `<meta name="description">` — descrição para mecanismos de busca
+- `<meta name="viewport">` — responsividade
+- `<meta charset>` — codificação de caracteres
+- `<link rel="canonical">` — URL canônica
+
+#### Open Graph (compartilhamento social)
+- `og:title` — título para compartilhamento
+- `og:description` — descrição para compartilhamento
+- `og:type` — tipo de conteúdo (website, article, etc.)
+- `og:url` — URL da página
+- `og:image` — imagem para compartilhamento (recomendada)
+- `og:site_name` — nome do site (recomendada)
+- `og:locale` — localidade (recomendada)
+
+#### Twitter Cards
+- `twitter:card` — tipo de card (summary, summary_large_image)
+- `twitter:title` — título para Twitter
+- `twitter:description` — descrição para Twitter
+- `twitter:image` — imagem para Twitter
+
+---
+
+### Validação de Conteúdo
+
+O módulo verifica se o conteúdo das metatags está dentro dos limites recomendados:
+
+| Tag | Mínimo | Recomendado | Máximo |
+|---|---|---|---|
+| `title` | 10 chars | 30-60 chars | 70 chars |
+| `description` | 50 chars | 120-160 chars | 300 chars |
+| `og:title` | 10 chars | — | 65 chars |
+| `og:description` | 50 chars | — | 200 chars |
+| `twitter:description` | 50 chars | — | 200 chars |
+
+---
+
+### Detecção de Tags Depreciadas
+
+O módulo identifica metatags obsoletas que devem ser removidas:
+
+- `keywords` — mecanismos de busca não usam mais
+- `revised` — não suportado
+- `abstract` — obsoleto
+- `author` — usar schema.org em vez disso
+- `generator` — expõe tecnologia usada (segurança)
+- `revisit-after` — Google ignora
+- `cache-control`, `pragma`, `expires` — usar HTTP headers
+
+---
+
+### Replicação Automática
+
+Se uma metatag está ausente, o módulo copia automaticamente de tags existentes:
+
+| Tag Ausente | Copiada De |
+|---|---|
+| `og:title` | `title` |
+| `og:description` | `description` |
+| `og:image:alt` | `description` ou `title` |
+| `twitter:title` | `og:title` → `title` |
+| `twitter:description` | `og:description` → `description` |
+| `twitter:image` | `og:image` |
+
+---
+
+### Injeção Automática (modo `fix`)
+
+No modo `fix`, o módulo injeta tags essenciais faltantes:
+
+- `charset="utf-8"` se ausente
+- `viewport` com `width=device-width, initial-scale=1`
+- `og:type="website"` se ausente
+- `og:url` a partir do `canonical`
+- `twitter:card="summary_large_image"` se ausente
+
+---
+
+### Validação de Imagens
+
+Para `og:image`, o módulo verifica:
+
+- Se a URL é absoluta ou começa com `/`
+- Se a extensão é suportada (jpg, png, webp, svg, avif)
+- Se o caminho é relativo sem começar com `/` (warning)
+
+---
+
+## Análise do DOM
+
+### Profundidade de Aninhamento
+
+O módulo detecta aninhamento excessivo de elementos:
+
+| Nível | Severidade |
+|---|---|
+| > 5 | Warning |
+| > 8 | Error |
+
+```
+✅ Aceitável:
+<body>
+  <main>
+    <article>
+      <h1>Título</h1>    ← Nível 3
+    </article>
+  </main>
+</body>
+
+❌ Problemático:
+<body>
+  <div><div><div><div><div><div><div><div>
+    <p>Profundo demais</p>  ← Nível 8+
+  </div></div></div></div></div></div></div></div>
+</body>
+```
+
+---
+
+### Hierarquia de Headings
+
+O módulo verifica:
+
+- **Existência de `<h1>`** — deve existir exatamente um
+- **Múltiplos `<h1>`** — warning (recomendado: apenas 1)
+- **Hierarquia sequencial** — não pular níveis (h1 → h2 → h3)
+
+```
+✅ Correto:           ❌ Incorreto:
+<h1>Título</h1>       <h1>Título</h1>
+<h2>Subtítulo</h2>    <h4>Pulou h2 e h3</h4>
+<h3>Seção</h3>
+
+✅ Correto:           ❌ Incorreto:
+<h1>Único H1</h1>     <h1>Título 1</h1>
+                      <h1>Título 2</h1>  ← Múltiplos h1
+```
+
+---
+
+### HTML Inválido
+
+O módulo detecta aninhamentos inválidos segundo a especificação HTML:
+
+| Não pode conter | Dentro de |
+|---|---|---|
+| `<div>`, `<table>`, `<ul>` | `<p>` |
+| `<a>` | `<a>` |
+| `<button>` | `<button>` |
+| `<form>` | `<form>` |
+| `<table>` | `<table>` |
+| Headings dentro | Headings |
+
+---
+
+### Acessibilidade
+
+O módulo verifica:
+
+- **Imagens sem `alt`** — erro
+- **Imagens sem `src`** — erro
+- **Links sem texto acessível** — erro
+- **Inputs sem `<label>`** — erro
+- **Iframes sem `title`** — warning
+- **Buttons sem `type`** — warning
+
+---
+
+## Output no Build
+
+Durante o build, o módulo exibe:
+
+```
+[nuxt-lite:seo] / — Score: 95/100 (2 issues)
+[nuxt-lite:seo] /sobre — Score: 70/100 (5 issues)
+[nuxt-lite:seo] /contato — Score: 85/100 (3 issues)
+
+  ╔══════════════════════════════════════════════════════════╗
+  ║           nuxt-lite: SEO Analysis Summary               ║
+  ╠══════════════════════════════════════════════════════════╣
+  ║  Pages analyzed:  3                                     ║
+  ║  Total issues:    10                                    ║
+  ║  Average score:   BOM 83/100                            ║
+  ╠══════════════════════════════════════════════════════════╣
+  ║  Top Issues:                                           ║
+  ║  ⚠️ Meta tag "canonical" está ausente (3x)             ║
+  ║  ❌ Tag <title> está ausente (1x)                      ║
+  ║  ℹ️ Tag "og:title" criada automaticamente (2x)         ║
+  ╠══════════════════════════════════════════════════════════╣
+  ║  Pages com menor score:                                ║
+  ║  /sobre                    REGULAR                  ║
+  ║  /contato                  BOM                      ║
+  ║  /                         EXCELENTE                ║
+  ╚══════════════════════════════════════════════════════════╝
+
+  │  ✓ SEO Report:      seo-report.json
+```
+
+---
+
+## Arquivo de Relatório
+
+Um arquivo `seo-report.json` é gerado no diretório de output:
+
+```json
+{
+  "generatedAt": "2024-01-01T00:00:00.000Z",
+  "summary": {
+    "totalPages": 3,
+    "totalIssues": 10,
+    "avgScore": 83
+  },
+  "topIssues": [...],
+  "pagesByScore": [
+    { "route": "/sobre", "score": 70 },
+    { "route": "/contato", "score": 85 },
+    { "route": "/", "score": 95 }
+  ],
+  "pages": [...]
+}
+```
+
+---
+
+## Opções Avançadas
+
+```ts [nuxt.config.ts]
+export default defineNuxtConfig({
+  nuxtLite: {
+    optimizeSeo: {
+      optimizeSeo: 'fix',
+      maxDomDepth: {
+        warning: 5,    // warning acima de 5 níveis
+        error: 8,      // error acima de 8 níveis
+      },
+      autoReplicate: true,   // replicar tags automaticamente
+      autoInject: true,      // injetar tags faltantes
+      failOnError: false,    // falhar build em errors
+      writeReport: true,     // gerar seo-report.json
+    },
+  },
+})
+```
+
+---
+
+::callout{type="tip"}
+Use `optimizeSeo: 'fix'` em produção para garantir que todas as páginas tenham metatags corretas, e `optimizeSeo: 'analyze'` em desenvolvimento para ver os relatórios sem modificar o HTML.
+::

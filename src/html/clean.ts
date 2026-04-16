@@ -30,11 +30,11 @@ export function stripVueRuntime(document: Document): void {
 export function stripNuxtScripts(document: Document): void {
   // Remove __NUXT_DATA__, __NUXT_CONFIG__, and inline scripts
   const scripts = document.querySelectorAll('script')
-  scripts.forEach(el => {
+  scripts.forEach((el) => {
     const id = el.id || ''
     const text = el.textContent || ''
     const hasDataAttr = el.hasAttribute('data-nuxt-data')
-    
+
     if (id === '__NUXT_DATA__' || hasDataAttr || text.includes('window.__NUXT__') || text.includes('__NUXT_DATA__')) {
       el.remove()
     }
@@ -58,6 +58,6 @@ export function stripNuxtScripts(document: Document): void {
   }
 
   // Remove Vue SSR comment markers
-  // linkedom might not fully support comment selection via querySelector, 
+  // linkedom might not fully support comment selection via querySelector,
   // we might need a tree walker or regex for final cleanup of comments if needed.
 }

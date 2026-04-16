@@ -8,10 +8,10 @@ import { CSS_COMMENT_RE, CSS_WS_RE, SKIP_AT_RULE_RE } from '../types'
 export function parseCssRules(css: string): Map<string, string> {
   const rules = new Map<string, string>()
   const seenAtRules = new Set<string>()
-  
+
   // Normalize URLs: convert relative paths to absolute paths
   // Matches url("fonts/...") or url("../fonts/...") but ignores data:, http://, and already absolute paths /
-  let clean = css
+  const clean = css
     .replace(/url\(['"]?([^'"]+)['"]?\)/g, (match, url) => {
       if (url.startsWith('data:') || url.startsWith('http') || url.startsWith('/')) {
         return match

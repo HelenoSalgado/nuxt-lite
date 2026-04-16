@@ -6,6 +6,48 @@ import { join } from 'node:path'
 // Public API — module configuration for nuxt.config.ts
 // ============================================================================
 
+export interface SeoOptions {
+  /**
+   * Enable SEO analysis and auto-fix.
+   * - `true` | `'analyze'`: Run analysis and report issues
+   * - `'fix'`: Auto-fix issues where possible + report
+   * @default false
+   */
+  optimizeSeo?: boolean | 'analyze' | 'fix'
+
+  /**
+   * Maximum allowed DOM depth before warning/error
+   */
+  maxDomDepth?: {
+    warning: number
+    error: number
+  }
+
+  /**
+   * Auto-replicate meta tags (og:title from title, etc.)
+   * @default true
+   */
+  autoReplicate?: boolean
+
+  /**
+   * Auto-inject missing meta tags
+   * @default false (only in 'fix' mode)
+   */
+  autoInject?: boolean
+
+  /**
+   * Fail build on SEO errors
+   * @default false
+   */
+  failOnError?: boolean
+
+  /**
+   * Output report file
+   * @default true
+   */
+  writeReport?: boolean
+}
+
 export interface ModuleOptions {
   /**
    * Optimize CSS output.
@@ -38,6 +80,12 @@ export interface ModuleOptions {
    * @default []
    */
   safelist?: string[]
+
+  /**
+   * SEO analysis and auto-fix options.
+   * Analyzes meta tags and DOM structure for best practices.
+   */
+  optimizeSeo?: SeoOptions | boolean | 'analyze' | 'fix'
 }
 
 // ============================================================================
@@ -45,9 +93,12 @@ export interface ModuleOptions {
 // ============================================================================
 
 export type CssMode = 'inline' | 'file' | 'none'
+export type SeoMode = 'analyze' | 'fix' | 'none'
 
 export interface ExtendedOptions extends ModuleOptions {
   _cssMode: CssMode
+  _seoMode: SeoMode
+  _seoResolved: SeoOptions & { enabled: boolean }
 }
 
 export interface ProcessResult {
@@ -125,6 +176,32 @@ export function resolveCssMode(options: ModuleOptions): CssMode {
   if (options.optimizeCss === true) return 'inline'
   if (options.inlineStyles) return 'inline'
   return 'none'
+}
+
+export function resolveSeoMode(options: ModuleOptions): SeoMode {
+  const seo = options.optimizeSeo
+  if (!seo) return 'none'
+  if (seo === true || seo === 'analyze') return 'analyze'
+  if (seo === 'fix') return 'fix'
+  if (typeof seo === 'object' && seo.optimizeSeo) {
+    if (seo.optimizeSeo === true || seo.optimizeSeo === 'analyze') return 'analyze'
+    if (seo.optimizeSeo === 'fix') return 'fix'
+  }
+  return 'none'
+}
+
+export function resolveSeoConfig(options: ModuleOptions): { mode: SeoMode, enabled: boolean, settings: SeoOptions } {
+  const mode = resolveSeoMode(options)
+  const enabled = mode !== 'none'
+  const baseSettings: SeoOptions = {
+    optimizeSeo: options.optimizeSeo,
+    maxDomDepth: options.optimizeSeo && typeof options.optimizeSeo === 'object' ? options.optimizeSeo.maxDomDepth : undefined,
+    autoReplicate: options.optimizeSeo && typeof options.optimizeSeo === 'object' ? options.optimizeSeo.autoReplicate ?? true : true,
+    autoInject: options.optimizeSeo && typeof options.optimizeSeo === 'object' ? options.optimizeSeo.autoInject : mode === 'fix',
+    failOnError: options.optimizeSeo && typeof options.optimizeSeo === 'object' ? options.optimizeSeo.failOnError ?? false : false,
+    writeReport: options.optimizeSeo && typeof options.optimizeSeo === 'object' ? options.optimizeSeo.writeReport ?? true : true,
+  }
+  return { mode, enabled, settings: baseSettings }
 }
 
 export function findOutputDir(nuxt: Nuxt): string | null {

@@ -44,6 +44,73 @@ export default defineNuxtConfig({
 | `optimizeCss` | `false` | `'inline'`: CSS por página. `'file'`: arquivo global único. `false`: desativado. |
 | `safelist` | `[]` | Classes ou seletores que NÃO devem ser removidos. |
 | `cleanHtml` | `true` | Remove artefatos Nuxt/Vue do HTML final. |
+| `optimizeSeo` | `false` | SEO analysis: `true`/`'analyze'` = reporta issues, `'fix'` = auto-corrige + reporta. |
+
+## SEO Analysis (`optimizeSeo`)
+
+Ative a análise SEO para verificar metatags e estrutura do DOM:
+
+```ts
+export default defineNuxtConfig({
+  modules: ['~~/nuxt-lite/src/module'],
+  nuxtLite: {
+    optimizeCss: 'inline',
+    optimizeSeo: true, // ou 'analyze' | 'fix'
+  },
+})
+```
+
+### Opções avançadas
+
+```ts
+nuxtLite: {
+  optimizeSeo: {
+    optimizeSeo: 'fix',        // 'analyze' = só reporta, 'fix' = tenta preencher meta tags ausentes usando o conteúdo do DOM (como <h1> para títulos e a primeira <img> do corpo para imagens de compartilhamento)
+    maxDomDepth: {
+      warning: 5,              // Nível para warning
+      error: 8,                // Nível para error
+    },
+    autoReplicate: true,       // Replicar og:title a partir de title, etc.
+    autoInject: true,          // Injetar tags faltantes (charset, viewport, etc.)
+    failOnError: false,        // Falhar build se houver errors de SEO
+    writeReport: true,         // Salvar seo-report.json
+  },
+}
+```
+
+### O que é analisado
+
+**Metatags:**
+- Presença de tags essenciais (`title`, `description`, `canonical`, `og:*`, `twitter:*`)
+- Tamanho de conteúdo (title: 30-60 chars, description: 120-160 chars)
+- Detecção de tags depreciadas (`keywords`, `revised`, etc.)
+- Replicação automática: `og:title` ← `title`, `twitter:description` ← `description`, etc.
+- Validação de URLs de imagens (`og:image`)
+
+**Estrutura do DOM:**
+- Aninhamento excessivo (>5 níveis = warning, >8 = error)
+- Hierarquia de headings (apenas 1 `<h1>`, sem pular níveis)
+- HTML inválido (`<div>` dentro de `<p>`, `<a>` dentro de `<a>`, etc.)
+- Acessibilidade: `alt` em imagens, labels em inputs, texto em links
+
+### Output
+
+Durante o build, o módulo exibe:
+
+```
+  [nuxt-lite:seo] / — Score: 95/100 (2 issues)
+  [nuxt-lite:seo] /about — Score: 70/100 (5 issues)
+
+  ╔══════════════════════════════════════════════════════════╗
+  ║           nuxt-lite: SEO Analysis Summary               ║
+  ╠══════════════════════════════════════════════════════════╣
+  ║  Pages analyzed:  2                                     ║
+  ║  Total issues:    7                                     ║
+  ║  Average score:   BOM 75/100                            ║
+  ╚══════════════════════════════════════════════════════════╝
+```
+
+Um arquivo `seo-report.json` é gerado no diretório de output com detalhes completos.
 
 ## Estrutura de Páginas
 

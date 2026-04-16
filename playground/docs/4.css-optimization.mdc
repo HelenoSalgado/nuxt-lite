@@ -1,0 +1,312 @@
+---
+title: 'Otimização de CSS'
+description: 'Como o nuxt-lite faz tree-shaking de CSS e entrega apenas o necessário'
+navigation:
+  title: 'CSS'
+  icon: '🎨'
+---
+
+# Otimização de CSS
+
+O nuxt-lite analisa quais seletores CSS são realmente usados em cada página e remove os demais — reduzindo drasticamente o tamanho dos estilos.
+
+---
+
+## O Problema
+
+Um projeto Nuxt típico carrega:
+
+- CSS de frameworks (Bootstrap, Tailwind, etc.)
+- CSS de componentes
+- CSS global
+- CSS de bibliotecas
+
+Muitos desses seletores **não são usados** em cada página específica, mas são entregues mesmo assim.
+
+---
+
+## A Solução
+
+O nuxt-lite:
+
+1. **Coleta** todos os arquivos CSS do projeto
+2. **Analisa** o HTML de cada página para encontrar classes/IDs usados
+3. **Filtra** as regras CSS, mantendo apenas as usadas
+4. **Entrega** o CSS otimizado inline ou em arquivo único
+
+---
+
+## Modos de Operação
+
+### `optimizeCss: false` (padrão)
+
+Nenhuma otimização de CSS é feita. O comportamento padrão do Nuxt/Vite é mantido.
+
+```ts
+export default defineNuxtConfig({
+  nuxtLite: {
+    optimizeCss: false,
+  },
+})
+```
+
+---
+
+### `optimizeCss: 'inline'`
+
+O CSS otimizado é injetado diretamente no `<head>` de cada página dentro de uma tag `<style>`.
+
+```ts
+export default defineNuxtConfig({
+  nuxtLite: {
+    optimizeCss: 'inline',
+  },
+})
+```
+
+**Resultado:**
+
+```html
+<head>
+  <!-- CSS otimizado inline -->
+  <style>
+    .header { display: flex; }
+    .nav-link { color: blue; }
+    h1 { font-size: 2rem; }
+    /* apenas seletores usados nesta página */
+  </style>
+</head>
+```
+
+**Ideal para:** Sites com poucas páginas ou CSS variado entre páginas.
+
+---
+
+### `optimizeCss: 'file'`
+
+Um único arquivo CSS otimizado é gerado em `/css/optimized.css` e linkado em todas as páginas.
+
+```ts
+export default defineNuxtConfig({
+  nuxtLite: {
+    optimizeCss: 'file',
+  },
+})
+```
+
+**Resultado:**
+
+```html
+<head>
+  <link rel="preload" href="/css/optimized.css" as="style">
+  <link rel="stylesheet" href="/css/optimized.css">
+</head>
+```
+
+**Ideal para:** Sites grandes onde o CSS é compartilhado entre páginas e o cache do browser é vantajoso.
+
+---
+
+## Safelist
+
+Classes adicionadas dinamicamente via JavaScript não aparecem no HTML estático e seriam removidas. Use `safelist` para preservá-las:
+
+```ts
+export default defineNuxtConfig({
+  nuxtLite: {
+    optimizeCss: 'inline',
+    safelist: [
+      'is-active',         // classe adicionada via JS
+      '.dropdown-open',    // seletor completo
+      '[data-tooltip]',    // seletor de atributo
+      'page-enter-active', // transição
+    ],
+  },
+})
+```
+
+### Selectores Essenciais (sempre preservados)
+
+O nuxt-lite sempre preserva automaticamente:
+
+- Tags HTML básicas: `html`, `body`, `head`, `h1`-`h6`, `p`, `a`, etc.
+- Pseudo-elementos: `*::before`, `*::after`, `*::-webkit-scrollbar`
+- Seleções: `::selection`, `::placeholder`
+- Transições Nuxt: `page-enter-*`, `page-leave-*`
+- Classes JS: `.header-hidden`, `.open`
+
+---
+
+## Como Funciona o Tree-Shaking
+
+### 1. Coleta de CSS
+
+Durante o build, o módulo varre o diretório de output e coleta todos os arquivos `.css`:
+
+```
+/.output/public/
+  /_nuxt/
+    /css/
+      main.css      ← Coletado
+      vendor.css    ← Coletado
+      pages.css     ← Coletado
+```
+
+### 2. Extração de Seletores Usados
+
+Para cada página HTML, o módulo busca:
+
+```ts
+// Atributo class
+class="header nav-link active"
+
+// Atributo id
+id="main-content"
+
+// Atributos data-*
+data-tooltip="info"
+```
+
+### 3. Parsing de CSS
+
+O CSS completo é parseado em regras individuais:
+
+```css
+/* Input */
+.header { display: flex; }
+.unused-class { color: red; }
+.nav-link { text-decoration: none; }
+
+/* Regras extraídas */
+- .header { display: flex; }          ← mantido
+- .unused-class { color: red; }       ← removido
+- .nav-link { text-decoration: none; } ← mantido
+```
+
+### 4. Filtragem
+
+Cada regra é comparada com os seletores usados:
+
+```
+Seletores usados na página: ['header', 'nav-link', 'h1', 'p']
+
+.header { ... }        ← ✅ usado
+.nav-link { ... }      ← ✅ usado
+h1 { ... }             ← ✅ usado
+p { ... }              ← ✅ usado
+.unused-class { ... }  ← ❌ removido
+.sidebar { ... }       ← ❌ removido
+```
+
+### 5. Output
+
+O CSS filtrado é inline ou em arquivo:
+
+```css
+/* Output (inline ou optimized.css) */
+.header { display: flex; }
+.nav-link { text-decoration: none; }
+h1 { font-size: 2rem; }
+p { margin-bottom: 1rem; }
+```
+
+---
+
+## Seletore de Atributos
+
+O módulo também detecta seletores de atributo no CSS:
+
+```css
+/* CSS original */
+[data-tooltip] { position: relative; }
+input[type="text"] { border: 1px solid #ccc; }
+a[href^="https"] { color: green; }
+
+/* Se [data-tooltip] está no HTML, a regra é preservada */
+```
+
+---
+
+## @-Rules Especiais
+
+Algumas @-rules são sempre preservadas:
+
+- `@font-face` — fontes customizadas
+- `@keyframes` — animações
+- `@-webkit-keyframes` — animações vendor
+
+```css
+/* Sempre preservado */
+@font-face {
+  font-family: 'CustomFont';
+  src: url('/font.woff2') format('woff2');
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+```
+
+---
+
+## Arquivos CSS Ignorados
+
+Alguns arquivos são ignorados na coleta para evitar duplicação:
+
+- `optimized.css` — arquivo gerado pelo módulo
+- `main.css` — pode conter regras redundantes
+
+---
+
+## Resultados Típicos
+
+| Cenário | CSS Original | CSS Otimizado | Redução |
+|---|---|---|---|
+| Landing page | 150KB | 12KB | 92% |
+| Blog | 200KB | 18KB | 91% |
+| Documentação | 180KB | 15KB | 92% |
+
+---
+
+## Exemplo Prático
+
+```ts
+// nuxt.config.ts
+export default defineNuxtConfig({
+  modules: ['nuxt-lite'],
+  nuxtLite: {
+    optimizeCss: 'inline',
+    safelist: ['is-active', '.dark', '.header-hidden'],
+  },
+})
+```
+
+```vue
+<!-- pages/index.vue -->
+<template>
+  <main data-page-content>
+    <h1 class="page-title">Bem-vindo</h1>
+    <nav class="nav">
+      <a class="nav-link" href="/sobre">Sobre</a>
+      <a class="nav-link" href="/contato">Contato</a>
+    </nav>
+    <button id="cta" class="btn-primary">Começar</button>
+  </main>
+</template>
+
+<style scoped>
+.page-title { font-size: 2rem; }
+.nav { display: flex; gap: 1rem; }
+.nav-link { color: #00dc82; }
+.btn-primary { background: #00dc82; color: white; }
+</style>
+```
+
+O CSS resultante conterá apenas os seletores `.page-title`, `.nav`, `.nav-link`, `.btn-primary` e seletores essenciais.
+
+---
+
+::callout{type="info"}
+O tree-shaking de CSS acontece durante o `nuxt generate`, não no `nuxt dev`. Em desenvolvimento, o CSS completo é carregado normalmente.
+::

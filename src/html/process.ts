@@ -26,7 +26,7 @@ export function processPageContent(
   // 2. CSS optimization
   if (cssMode !== 'none') {
     stripExistingCss(document)
-    
+
     // In 'file' mode, we can already inject the link to the optimized file
     if (cssMode === 'file') {
       const preload = document.createElement('link')
@@ -55,7 +55,7 @@ export function processPageContent(
   document.body.appendChild(scriptEl)
 
   let finalHtml = document.toString()
-  
+
   // Restore: Critical SSR comment cleaning
   finalHtml = finalHtml
     .replace(/<!--\[--\]-->/g, '')
@@ -66,6 +66,6 @@ export function processPageContent(
 
   return {
     html: finalHtml,
-    usedSelectors
+    usedSelectors,
   }
 }

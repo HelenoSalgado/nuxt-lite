@@ -1,0 +1,290 @@
+---
+title: 'Migração e Compatibilidade'
+description: 'Como migrar um projeto Nuxt existente para usar nuxt-lite'
+navigation:
+  title: 'Migração'
+  icon: '🔄'
+---
+
+# Migração e Compatibilidade
+
+## Checklist de Migração
+
+Antes de migrar, verifique:
+
+- [ ] O projeto usa `nuxt generate` (estático)
+- [ ] O layout tem `<main>` ou `[data-page-content]`
+- [ ] Header/footer estão fora do `<main>`
+- [ ] Não há reatividade Vue no cliente
+- [ ] CSS é compatível com tree-shaking
+
+---
+
+## Passo a Passo
+
+### 1. Instalar o Módulo
+
+```bash
+npm install nuxt-lite
+# ou
+pnpm add nuxt-lite
+# ou
+yarn add nuxt-lite
+```
+
+### 2. Configurar `nuxt.config.ts`
+
+```ts
+export default defineNuxtConfig({
+  modules: [
+    'nuxt-lite', // ← PRIMEIRO módulo!
+    // ... outros módulos
+  ],
+  nuxtLite: {
+    optimizeCss: 'inline',
+    cleanHtml: true,
+  },
+})
+```
+
+### 3. Ajustar o Layout
+
+**Antes:**
+
+```vue
+<!-- layouts/default.vue -->
+<template>
+  <div>
+    <header>Menu</header>
+    <NuxtPage />
+    <footer>Rodapé</footer>
+  </div>
+</template>
+```
+
+**Depois:**
+
+```vue
+<!-- layouts/default.vue -->
+<template>
+  <div>
+    <header>Menu</header>
+    <main data-page-content>
+      <slot />
+    </main>
+    <footer>Rodapé</footer>
+  </div>
+</template>
+```
+
+### 4. Adicionar Transições CSS
+
+```css
+/* assets/css/transitions.css */
+.page-enter-active,
+.page-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.page-enter-from,
+.page-leave-to {
+  opacity: 0;
+}
+```
+
+### 5. Verificar Componentes
+
+Componentes com reatividade Vue no cliente **não funcionarão**:
+
+```vue
+<!-- ❌ NÃO funciona -->
+<script setup>
+const count = ref(0)
+const doubled = computed(() => count.value * 2)
+</script>
+
+<!-- ✅ FUNCIONA (JavaScript puro) -->
+<script setup>
+if (import.meta.client) {
+  let count = 0
+  document.getElementById('btn')?.addEventListener('click', () => {
+    count++
+    document.getElementById('counter')!.textContent = count
+  })
+}
+</script>
+```
+
+### 6. Gerar o Site
+
+```bash
+nuxt generate
+```
+
+Verifique o output:
+
+```
+┌─ nuxt-lite: Finalizing build ───────
+│  ✓ CSS optimized:    15.2KB
+│  ✓ Payloads:      5
+│  ✓ Manifest:      /manifest.json
+│  ✓ Runtime:       /lite.min.js
+└─────────────────────────────────────
+```
+
+---
+
+## Problemas Comuns
+
+### Vue Components no Cliente
+
+**Problema:** Componentes com `ref`, `reactive`, `watch` não funcionam.
+
+**Solução:** Use JavaScript puro ou Web Components.
+
+```vue
+<!-- Web Component para interatividade -->
+<script setup>
+if (import.meta.client && !customElements.get('my-tabs')) {
+  class MyTabs extends HTMLElement {
+    connectedCallback() {
+      // Implementar tabs com DOM API
+    }
+  }
+  customElements.define('my-tabs', MyTabs)
+}
+</script>
+
+<template>
+  <my-tabs>
+    <div slot="tab">Tab 1</div>
+    <div slot="tab">Tab 2</div>
+    <div slot="panel">Conteúdo 1</div>
+    <div slot="panel">Conteúdo 2</div>
+  </my-tabs>
+</template>
+```
+
+### CSS Não Otimizado
+
+**Problema:** Classes adicionadas via JS são removidas.
+
+**Solução:** Adicionar ao `safelist`:
+
+```ts
+nuxtLite: {
+  optimizeCss: 'inline',
+  safelist: ['is-active', '.dropdown-open', '[data-state="open]'],
+}
+```
+
+### Navegação Não Funciona
+
+**Problema:** Links não interceptam navegação.
+
+**Verificar:**
+
+1. Links são internos (começam com `/`)?
+2. HTML tem `<main>` com `data-page-content`?
+3. Runtime `lite.js` está sendo carregado?
+
+### SEO Issues no Build
+
+**Problema:** `failOnError: true` falha o build.
+
+**Solução:**
+
+1. Rodar com `optimizeSeo: 'analyze'` primeiro
+2. Corrigir os issues reportados
+3. Ou usar `optimizeSeo: 'fix'` para correção automática
+
+---
+
+## Compatibilidade com Módulos
+
+### ✅ Compatíveis
+
+| Módulo | Notas |
+|---|---|
+| `@nuxt/content` | ✅ Gera HTML estático |
+| `@nuxt/image` | ✅ Otimiza imagens no build |
+| `@nuxt/fonts` | ✅ Gera CSS de fontes |
+| `@nuxtjs/seo` | ✅ Gera sitemaps |
+| `@nuxtjs/tailwind` | ✅ CSS é tree-shaked |
+
+### ⚠️ Parcialmente Compatíveis
+
+| Módulo | Notas |
+|---|---|
+| `@nuxtjs/i18n` | ⚠️ Sem reatividade no cliente |
+| `@pinia/nuxt` | ⚠️ Sem reatividade no cliente |
+| `@vueuse/nuxt` | ⚠️ Composables não funcionam |
+
+### ❌ Incompatíveis
+
+| Módulo | Motivo |
+|---|---|
+| Módulos que requerem SSR | nuxt-lite é só estático |
+| Módulos de hidratação | Sem Vue no cliente |
+
+---
+
+## Comparação: Antes e Depois
+
+### Tamanho do JavaScript
+
+```
+ANTES (Nuxt padrão):
+  vendor.js:     250KB
+  app.js:         50KB
+  pages/*.js:    200KB
+  Total:         500KB
+
+DEPOIS (nuxt-lite):
+  lite.min.js:     5KB
+  Total:           5KB
+```
+
+### Tamanho do CSS
+
+```
+ANTES:
+  main.css:      150KB (Tailwind completo)
+
+DEPOIS:
+  inline CSS:     15KB (apenas usados)
+```
+
+### Performance
+
+```
+ANTES:
+  TTFB:          200ms
+  FCP:           800ms
+  LCP:          1500ms
+  TTI:          3000ms (hidratação)
+
+DEPOIS:
+  TTFB:          200ms
+  FCP:           400ms
+  LCP:           800ms
+  TTI:           400ms (sem hidratação)
+```
+
+---
+
+## Rollback
+
+Se precisar reverter:
+
+1. Remover `nuxt-lite` de `modules`
+2. Reverter mudanças no layout
+3. `npm remove nuxt-lite`
+
+O projeto voltará ao comportamento normal do Nuxt.
+
+---
+
+::callout{type="warning"}
+Sempre teste o build gerado (`nuxt generate`) antes de fazer deploy. Abra os arquivos HTML no navegador e verifique se a navegação funciona corretamente.
+::

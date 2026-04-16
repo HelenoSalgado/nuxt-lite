@@ -2,7 +2,7 @@ import { defineNuxtModule, createResolver } from '@nuxt/kit'
 import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync, readdirSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import type { ModuleOptions, ExtendedOptions } from './types'
-import { resolveCssMode, findOutputDir } from './types'
+import { resolveCssMode, findOutputDir, resolveSeoConfig } from './types'
 import { processPageContent } from './html/process'
 import { collectAllCssFiles, removeRedundantCssFiles } from './fs'
 import { parseCssRules } from './css/parser'
@@ -25,31 +25,68 @@ export default defineNuxtModule<ModuleOptions>({
   setup(options, nuxt) {
     const resolver = createResolver(import.meta.url)
     const cssMode = resolveCssMode(options)
-    const extendedOptions: ExtendedOptions = { ...options, _cssMode: cssMode }
+    const seoConfig = resolveSeoConfig(options)
+    const extendedOptions: ExtendedOptions = {
+      ...options,
+      _cssMode: cssMode,
+      _seoMode: seoConfig.mode,
+      _seoResolved: { ...seoConfig.settings, enabled: seoConfig.enabled },
+    }
 
     if (nuxt.options.dev) return
 
-    let cssRules: Map<string, string> | null = null
+    const cssRules: Map<string, string> | null = null
     const globalUsedSelectors = new Set<string>()
     const pageManifest: Record<string, { meta: any, domSize: number }> = {}
+    const seoReports = new Map<string, import('./seo/types').SeoReport>()
 
     // Hook: nitro:config — intercept HTML, inject SLOT markers and process page
     nuxt.hook('nitro:config', (nitroConfig: any) => {
       nitroConfig.hooks = nitroConfig.hooks || {}
-      
+
       nitroConfig.hooks['prerender:generate'] = async (route: any) => {
         // Only process HTML pages
         if (!route || typeof route.contents !== 'string') return
         if (!route.route || route.skip) return
         if (route.route.startsWith('/_nuxt') || route.route.startsWith('/__') || route.route.startsWith('/_ipx/')) return
+        if (route.route === '/200.html' || route.route === '/404.html' || route.error) return
         if (/\.(json|xml|txt|webp|png|jpg|svg|css|js)$/i.test(route.route)) return
         if (!route.contents.includes('<!DOCTYPE html>') && !route.contents.includes('<html')) return
 
+        // Normalize route to avoid duplicates (e.g. /about vs /about/)
+        const normalizedRoute = route.route === '/' ? '/' : route.route.replace(/\/$/, '')
+        
         let html = route.contents as string
 
         // 1. Process Page (Clean, Inject Runtime script tag, etc.)
         const { html: processedHtml, usedSelectors } = processPageContent(html, extendedOptions, '')
         html = processedHtml
+
+        // 1b. SEO Processing (if enabled)
+        if (seoConfig.enabled && !seoReports.has(normalizedRoute)) {
+          const { processSeoMeta } = await import('./seo/metatags')
+          const { analyzeDom, domAnalysisToSeoIssues } = await import('./seo/dom-analysis')
+
+          // Process meta tags
+          const seoResult = processSeoMeta(html, normalizedRoute, seoConfig.mode)
+          html = seoResult.html
+
+          // Analyze DOM structure
+          const domResult = analyzeDom(html, {
+            maxDomDepth: seoConfig.settings.maxDomDepth,
+          })
+
+          // Combine issues
+          seoResult.report.issues.push(...domAnalysisToSeoIssues(domResult))
+
+          // Store report for consolidation
+          seoReports.set(normalizedRoute, seoResult.report)
+
+          // Log single page summary
+          const scoreColor = seoResult.report.score >= 90 ? '\x1B[32m' : seoResult.report.score >= 70 ? '\x1B[33m' : '\x1B[31m'
+          const reset = '\x1B[0m'
+          console.log(`  [nuxt-lite:seo] ${normalizedRoute} — Score: ${scoreColor}${seoResult.report.score}${reset}/100`)
+        }
 
         // Accumulate selectors for global CSS mode
         if (cssMode === 'file') {
@@ -70,11 +107,13 @@ export default defineNuxtModule<ModuleOptions>({
             if (no !== -1 && no < nc) {
               depth++
               pos = no + 5
-            } else {
+            }
+            else {
               depth--
               if (depth === 0) {
                 marked = html.slice(0, afterOpen) + '<!--NL:SLOT_START-->' + html.slice(afterOpen, nc) + '<!--NL:SLOT_END-->' + html.slice(nc)
-              } else {
+              }
+              else {
                 pos = nc + 7
               }
             }
@@ -84,18 +123,18 @@ export default defineNuxtModule<ModuleOptions>({
         // 3. Extract payload
         const { serializePage } = await import('./html/serialize')
         const payload = serializePage(marked)
-        
+
         // Save payload meta for manifest
         const routeKey = route.route === '' ? '/' : (route.route.endsWith('/') ? route.route : route.route + '/')
-        pageManifest[routeKey] = { 
-          meta: payload.meta, 
-          domSize: JSON.stringify(payload.dom).length 
+        pageManifest[routeKey] = {
+          meta: payload.meta,
+          domSize: JSON.stringify(payload.dom).length,
         }
 
         // Store payload in route so we can write it in nitro:close or similar
         // Actually, we can just write it here if we find the output dir
         // But better to do it once we have the output dir in 'close'
-        
+
         route.contents = marked
       }
     })
@@ -116,11 +155,13 @@ export default defineNuxtModule<ModuleOptions>({
       let runtimeSrc: string
       try {
         runtimeSrc = readFileSync(resolver.resolve('../dist/runtime/lite.min.js'), 'utf-8')
-      } catch {
+      }
+      catch {
         // Fallback to source if not found (should be there in production)
         try {
           runtimeSrc = readFileSync(resolver.resolve('./runtime/lite.js'), 'utf-8')
-        } catch {
+        }
+        catch {
           runtimeSrc = 'console.warn("[nuxt-lite] Runtime not found")'
         }
       }
@@ -142,31 +183,32 @@ export default defineNuxtModule<ModuleOptions>({
             writeFileSync(outPath, optimized, 'utf-8')
             removeRedundantCssFiles(outputDir, outPath)
             console.log(`  │  ✓ CSS optimized:    ${(optimized.length / 1024).toFixed(1)}KB`)
-          } else if (cssMode === 'inline') {
-             // In inline mode, we have to re-read HTML because we didn't have the CSS rules 
-             // during prerender:generate (chicken-and-egg problem)
-             // This is the ONLY time we read HTML back.
-             const htmlFiles: string[] = []
-             function collectHtml(d: string) {
-               for (const entry of readdirSync(d)) {
-                 const full = join(d, entry)
-                 if (statSync(full).isDirectory()) collectHtml(full)
-                 else if (entry === 'index.html') htmlFiles.push(full)
-               }
-             }
-             collectHtml(outputDir)
-             
-             for (const path of htmlFiles) {
-               let html = readFileSync(path, 'utf-8')
-               const used = new Set(globalUsedSelectors) // Fallback or re-extract
-               // For accuracy, we re-extract used selectors from the processed HTML
-               const { extractUsedSelectors } = await import('./html/extract')
-               const currentUsed = extractUsedSelectors(html, options.safelist)
-               const optimized = filterCssBySelectors(rules, currentUsed)
-               html = html.replace('</head>', `<style>${optimized}</style></head>`)
-               writeFileSync(path, html, 'utf-8')
-             }
-             console.log(`  │  ✓ CSS inlined:      ${htmlFiles.length} pages`)
+          }
+          else if (cssMode === 'inline') {
+            // In inline mode, we have to re-read HTML because we didn't have the CSS rules
+            // during prerender:generate (chicken-and-egg problem)
+            // This is the ONLY time we read HTML back.
+            const htmlFiles: string[] = []
+            function collectHtml(d: string) {
+              for (const entry of readdirSync(d)) {
+                const full = join(d, entry)
+                if (statSync(full).isDirectory()) collectHtml(full)
+                else if (entry === 'index.html') htmlFiles.push(full)
+              }
+            }
+            collectHtml(outputDir)
+
+            for (const path of htmlFiles) {
+              let html = readFileSync(path, 'utf-8')
+              const used = new Set(globalUsedSelectors) // Fallback or re-extract
+              // For accuracy, we re-extract used selectors from the processed HTML
+              const { extractUsedSelectors } = await import('./html/extract')
+              const currentUsed = extractUsedSelectors(html, options.safelist)
+              const optimized = filterCssBySelectors(rules, currentUsed)
+              html = html.replace('</head>', `<style>${optimized}</style></head>`)
+              writeFileSync(path, html, 'utf-8')
+            }
+            console.log(`  │  ✓ CSS inlined:      ${htmlFiles.length} pages`)
           }
         }
       }
@@ -189,9 +231,9 @@ export default defineNuxtModule<ModuleOptions>({
       const { extractSlotContent, extractMetaTags } = await import('./html/serialize')
 
       for (const htmlPath of htmlFiles) {
-        const html = readFileSync(htmlPath, 'utf-8')
+        let html = readFileSync(htmlPath, 'utf-8')
         const relPath = relative(outputDir, htmlPath)
-        
+
         let routePath = relPath.replace(/(^|\/)index\.html$/, '').replace(/\\/g, '/')
         if (routePath.endsWith('.html')) routePath = routePath.replace(/\.html$/, '')
         const route = routePath === '' ? '/' : '/' + routePath.replace(/\/$/, '') + '/'
@@ -201,17 +243,22 @@ export default defineNuxtModule<ModuleOptions>({
         if (startIdx !== -1 && endIdx !== -1) {
           const slotHtml = html.substring(startIdx + '<!--NL:SLOT_START-->'.length, endIdx)
           const payload = { dom: extractSlotContent(slotHtml), meta: extractMetaTags(html) }
-          
+
           let payloadPath: string
           if (route === '/') {
             payloadPath = join(outputDir, '_payload.json')
-          } else {
+          }
+          else {
             const dir = join(outputDir, routePath)
             if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
             payloadPath = join(dir, '_payload.json')
           }
           writeFileSync(payloadPath, JSON.stringify(payload), 'utf-8')
           totalPayloads++
+
+          // Remove markers from the final HTML
+          html = html.replace('<!--NL:SLOT_START-->', '').replace('<!--NL:SLOT_END-->', '')
+          writeFileSync(htmlPath, html, 'utf-8')
         }
       }
 
@@ -219,7 +266,30 @@ export default defineNuxtModule<ModuleOptions>({
 
       console.log(`  │  ✓ Payloads:      ${totalPayloads}`)
       console.log(`  │  ✓ Manifest:      /manifest.json`)
-      console.log(`  │  ✓ Runtime:       /lite.js`)
+      console.log(`  │  ✓ Runtime:       /lite.min.js`)
+
+      // 4. SEO Reports (if enabled)
+      if (seoConfig.enabled && seoReports.size > 0) {
+        const reportsArray = Array.from(seoReports.values())
+        const { printAndSaveReports } = await import('./seo/report')
+        const reportResult = printAndSaveReports(reportsArray, outputDir, seoConfig.settings.writeReport, nuxt.options.rootDir)
+        if (reportResult.md) {
+          console.log(`  │  ✓ SEO Report:      ${relative(nuxt.options.rootDir, reportResult.md)}`)
+        }
+        else if (reportResult.json) {
+          console.log(`  │  ✓ SEO Report:      ${relative(outputDir, reportResult.json)}`)
+        }
+
+        // Check for SEO errors if failOnError is enabled
+        if (seoConfig.settings.failOnError) {
+          const errorCount = reportsArray.reduce((sum, r) => sum + r.issues.filter(i => i.severity === 'error').length, 0)
+          if (errorCount > 0) {
+            console.error(`\n  ❌ [nuxt-lite:seo] Build failed due to ${errorCount} SEO error(s)`)
+            process.exit(1)
+          }
+        }
+      }
+
       console.log(`  └─────────────────────────────────────`)
     })
   },

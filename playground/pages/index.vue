@@ -5,6 +5,10 @@
       <NuxtLink to="/">Home</NuxtLink>
       <NuxtLink to="/sobre">Sobre</NuxtLink>
       <NuxtLink to="/contato">Contato</NuxtLink>
+      <NuxtLink
+        to="/docs"
+        class="docs-link"
+      >📖 Documentação</NuxtLink>
     </nav>
 
     <main data-page-content>
@@ -69,6 +73,11 @@ nav {
 nav a {
   color: blue;
   text-decoration: underline;
+}
+
+.docs-link {
+  color: #059669 !important;
+  font-weight: 600;
 }
 
 button {

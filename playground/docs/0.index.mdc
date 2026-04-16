@@ -1,0 +1,90 @@
+---
+title: 'nuxt-lite — Documentação Oficial'
+description: 'Módulo Nuxt que substitui o Vue runtime por um script leve de ~5KB para navegação SPA em sites estáticos.'
+navigation:
+  title: 'Introdução'
+  icon: '🏠'
+seo:
+  keywords: ['nuxt-lite', 'nuxt module', 'static site', 'lightweight runtime', 'SPA navigation']
+  ogType: 'website'
+meta:
+  author: 'nuxt-lite team'
+  category: 'introdução'
+  tags: ['introdução', 'visão geral', 'o que é']
+  version: '0.0.1'
+  lastUpdated: '2026-04-14'
+toc: true
+---
+
+# nuxt-lite
+
+## Visão Geral
+
+**nuxt-lite** é um módulo Nuxt que substitui o JavaScript do Vue/Nuxt no cliente por um runtime leve (~5KB minificado e gzip) que gerencia navegação SPA e troca de conteúdo via JSON.
+
+Ele foi projetado especificamente para `nuxt generate` — quando você precisa de um site estático rápido, sem o peso do framework Vue no navegador.
+
+---
+
+## O Problema
+
+Um site estático gerado pelo Nuxt normalmente carrega:
+
+- **Vue Runtime** (~500KB min+gzip)
+- **Hydration JavaScript** (centenas de KB adicionais)
+- **Módulos Nuxt** (variável, mas frequentemente significativo)
+
+Para um site de conteúdo (blog, landing page, documentação), isso é **desnecessário**. O usuário baixa um framework completo para renderizar HTML estático.
+
+---
+
+## A Solução
+
+O nuxt-lite:
+
+1. **Extrai o conteúdo** de cada página durante o build e transforma em JSON compacto
+2. **Remove o Vue runtime** do HTML final
+3. **Injeta um runtime mínimo** (~5KB) que:
+   - Reconstrói o DOM a partir do JSON
+   - Intercepta cliques em links para navegação SPA
+   - Faz prefetch via `IntersectionObserver`
+   - Aplica transições CSS
+   - Gerencia foco para acessibilidade
+
+**Resultado:** De ~500KB para ~5KB de JavaScript no cliente. Uma redução de **~99%**.
+
+---
+
+## Quando Usar
+
+| ✅ Use nuxt-lite | ❌ Não use |
+|---|---|
+| Sites de conteúdo | Apps com reatividade Vue |
+| Blogs e documentações | Formulários complexos |
+| Landing pages | Dashboards interativos |
+| Sites estáticos com navegação | SSR ou `nuxt dev` |
+| Performance é prioridade | Componentes com `ref`/`reactive` no cliente |
+
+---
+
+## Métricas
+
+```
+Vue Runtime (original):  ~500KB
+nuxt-lite runtime:         ~5KB
+Redução:                   ~99%
+```
+
+---
+
+## Requisitos
+
+- Nuxt 4.x
+- `nuxt generate` (estático)
+- Layout com `<main>` ou `[data-page-content]`
+
+---
+
+::callout{type="info"}
+O nuxt-lite **não é hidratação Vue**. Componentes que dependem de `ref`, `reactive` ou reatividade Vue no navegador **não funcionarão**. Para interatividade leve, use JavaScript puro ou Web Components.
+::

@@ -1,0 +1,276 @@
+---
+title: 'Como Funciona — Arquitetura Interna'
+description: 'Entenda a arquitetura do nuxt-lite: build-time com serialização JSON e client-side com runtime de 5KB.'
+navigation:
+  title: 'Como Funciona'
+  icon: '⚙️'
+seo:
+  keywords: ['arquitetura', 'build-time', 'client-side', 'JSON payload', 'IntersectionObserver', 'SPA']
+  ogType: 'article'
+meta:
+  author: 'nuxt-lite team'
+  category: 'arquitetura'
+  tags: ['arquitetura', 'payload', 'runtime', 'navegação', 'prefetch']
+  version: '0.0.1'
+  lastUpdated: '2026-04-14'
+toc: true
+---
+
+# Como Funciona
+
+O nuxt-lite opera em duas fases: **build-time** (durante `nuxt generate`) e **client-side** (no navegador).
+
+---
+
+## Build-time
+
+Durante o `nuxt generate`, o módulo intercepta cada página HTML gerada e realiza as seguintes operações:
+
+### 1. Parse do HTML
+
+O HTML de cada página é parseado usando **linkedom** (um parser DOM rápido para Node.js).
+
+```
+Página HTML → linkedom → DOM virtual
+```
+
+### 2. Extração de Conteúdo
+
+O módulo identifica o conteúdo variável através de:
+
+- Slot markers: `<!--NL:SLOT_START-->` e `<!--NL:SLOT_END-->`
+- Fallback: conteúdo dentro de `<main>` ou `[data-page-content]`
+
+```
+<html>
+  <header>...</header>     ← Preservado no HTML
+  <main>
+    <!--NL:SLOT_START-->
+    <h1>Conteúdo da página</h1>  ← Extraído como JSON
+    <p>Texto variável...</p>
+    <!--NL:SLOT_END-->
+  </main>
+  <footer>...</footer>     ← Preservado no HTML
+</html>
+```
+
+### 3. Serialização para JSON
+
+O conteúdo extraído é convertido em uma árvore JSON hierárquica:
+
+```json [_payload.json]
+{
+  "dom": [
+    {
+      "type": "element",
+      "tag": "h1",
+      "attrs": {},
+      "children": [
+        { "type": "text", "content": "Conteúdo da página" }
+      ]
+    },
+    {
+      "type": "element",
+      "tag": "p",
+      "attrs": {},
+      "children": [
+        { "type": "text", "content": "Texto variável..." }
+      ]
+    }
+  ],
+  "meta": {
+    "title": "Minha Página",
+    "description": "Descrição da página",
+    "canonical": "https://exemplo.com/",
+    "og": { "title": "Minha Página", "type": "website" },
+    "twitter": { "card": "summary_large_image" }
+  }
+}
+```
+
+### 4. Limpeza do HTML
+
+O HTML original é limpo:
+
+- Scripts Vue/Nuxt removidos
+- Comentários Vue removidos
+- Tags `__NUXT_DATA__` removidas
+- Runtime leve injetado no `<body>`
+
+### 5. Otimização de CSS
+
+Se `optimizeCss` estiver ativado:
+
+- Coleta todos os arquivos CSS
+- Analisa quais seletores são usados no HTML da página
+- Remove seletores não utilizados (tree-shaking)
+- Inline ou arquivo único, dependendo do modo
+
+### 6. SEO Analysis
+
+Se `optimizeSeo` estiver ativado:
+
+- Analisa metatags (title, description, OG, Twitter)
+- Verifica conformidade com melhores práticas
+- Replica tags automaticamente (og:title ← title)
+- Analisa estrutura do DOM (profundidade, headings, acessibilidade)
+- Gera relatório e injeta correções (modo fix)
+
+---
+
+## Client-side
+
+No navegador, o runtime leve (~5KB) gerencia toda a navegação.
+
+### 1. Inicialização
+
+Ao carregar a página:
+
+```js
+// lite.min.js
+document.addEventListener('DOMContentLoaded', () => {
+  initRouter()
+  initPrefetch()
+  initTransitions()
+})
+```
+
+### 2. IntersectionObserver + Prefetch
+
+O runtime monitora links que entram na viewport:
+
+```
+┌─────────────────────────────────┐
+│  <a href="/sobre">Sobre</a>     │  ← Entra na viewport
+│  <a href="/contato">Contato</a> │
+└─────────────────────────────────┘
+         ↓
+  IntersectionObserver detecta
+         ↓
+  Fetch /sobre/_payload.json (prefetch)
+         ↓
+  Cache do payload na memória
+```
+
+### 3. Navegação SPA
+
+Ao clicar em um link:
+
+```
+1. Previne navegação padrão do browser
+2. Aplica classe de transição (page-leave)
+3. Busca _payload.json se não está em cache
+4. Reconstrói DOM a partir do JSON
+5. Substitui conteúdo do <main>
+6. Atualiza URL via History API
+7. Aplica classe de transição (page-enter)
+8. Move foco para <h1> (acessibilidade)
+9. Atualiza <title> do documento
+```
+
+### 4. Reconstrução do DOM
+
+O JSON é convertido de volta para HTML:
+
+```js
+// JSON → DOM
+{
+  "type": "element",
+  "tag": "h1",
+  "children": [{ "type": "text", "content": "Olá!" }]
+}
+
+// Resultado:
+<h1>Olá!</h1>
+```
+
+### 5. Gerenciamento de Estado
+
+O runtime mantém um cache de payloads prefetchados:
+
+```
+Cache:
+  "/"        → payload da home
+  "/sobre"   → payload da página sobre
+  "/contato" → payload da página contato
+```
+
+---
+
+## Fluxo Completo
+
+```
+┌──────────────────────────────────────────────────────┐
+│                    nuxt generate                      │
+│                                                       │
+│  1. Nuxt gera HTML SSR                                │
+│  2. nuxt-lite intercepta via prerender:generate       │
+│  3. Extrai conteúdo do <main>                         │
+│  4. Serializa para _payload.json                      │
+│  5. Otimiza CSS (tree-shaking)                        │
+│  6. Analisa SEO (se ativado)                          │
+│  7. Limpa HTML (remove Vue/Nuxt artifacts)            │
+│  8. Injeta lite.min.js                                │
+│  9. Salva HTML limpo + payload                        │
+└──────────────────────────────────────────────────────┘
+                        ↓
+┌──────────────────────────────────────────────────────┐
+│                    Navegador                          │
+│                                                       │
+│  1. Carrega HTML estático (SSR inicial)               │
+│  2. lite.min.js executa (5KB)                         │
+│  3. IntersectionObserver monitora links               │
+│  4. Prefetch de _payload.json                         │
+│  5. Clique → troca conteúdo via JSON                  │
+│  6. Transições CSS + foco automático                  │
+└──────────────────────────────────────────────────────┘
+```
+
+---
+
+## Limitações
+
+### O que funciona
+
+| Feature | Suporte |
+|---|---|
+| Conteúdo estático | ✅ |
+| Navegação entre páginas | ✅ |
+| Transições CSS | ✅ |
+| Meta tags | ✅ |
+| CSS otimizado | ✅ |
+| Acessibilidade (foco) | ✅ |
+
+### O que NÃO funciona
+
+| Feature | Por quê |
+|---|---|
+| `ref`/`reactive` Vue | Vue runtime removido |
+| Componentes Vue no cliente | Sem hidratação |
+| `nuxt dev` / SSR | Feito para estático |
+| `watch`/`computed` no browser | Sem Vue no cliente |
+
+---
+
+## Para Interação no Cliente
+
+Use JavaScript puro ou Web Components:
+
+```vue
+<template>
+  <main data-page-content>
+    <h1>Minha Página</h1>
+    <button id="myButton">Clique</button>
+    <p id="output"></p>
+  </main>
+</template>
+
+<script setup>
+// JavaScript que funciona no cliente
+if (import.meta.client) {
+  document.getElementById('myButton')?.addEventListener('click', () => {
+    document.getElementById('output')!.textContent = 'Clicado!'
+  })
+}
+</script>
+```
