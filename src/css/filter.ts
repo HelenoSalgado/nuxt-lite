@@ -26,16 +26,7 @@ export function filterCssBySelectors(
       continue
     }
 
-    // Preserve @font-face, @keyframes, etc. entirely
-    if (selector.startsWith('@') && PRESERVE_AT_RULE_RE.test(selector)) {
-      if (!seenBlocks.has(block)) {
-        seenBlocks.add(block)
-        kept.push(block)
-      }
-      continue
-    }
-
-    // Other at-rules (like raw @media) — keep once
+    // Preserve other at-rules (like @font-face, @keyframes) entirely
     if (selector.startsWith('@')) {
       if (!seenBlocks.has(block)) {
         seenBlocks.add(block)

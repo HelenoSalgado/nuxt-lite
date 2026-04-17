@@ -49,13 +49,19 @@ export function parseCssRules(css: string): Map<string, string> {
     const block = clean.slice(braceStart, j).trim()
 
     if (selector.startsWith('@')) {
-      if (!seenAtRules.has(selector)) {
-        seenAtRules.add(selector)
-        rules.set(selector, selector + ' ' + block)
+      if (selector.startsWith('@media') || selector.startsWith('@supports') || selector.startsWith('@container')) {
+        // Extract inner selectors for matching, skip raw unoptimized block
+        const inner = block.slice(1, -1).trim()
+        extractInnerSelectors(inner, selector, rules)
       }
-      // Extract inner selectors for matching
-      const inner = block.slice(1, -1).trim()
-      extractInnerSelectors(inner, selector, rules)
+      else {
+        // Flat at-rules (@font-face, @keyframes): keep with unique key to prevent loss
+        const key = selector + '|' + block
+        if (!seenAtRules.has(key)) {
+          seenAtRules.add(key)
+          rules.set(key, selector + ' ' + block)
+        }
+      }
     }
     else {
       rules.set(selector, selector + ' ' + block)

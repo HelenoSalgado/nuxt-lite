@@ -21,6 +21,7 @@ interface DomNode {
 
 interface PagePayload {
   dom: DomNode[]
+  css?: string
   meta: {
     title: string
     description?: string
@@ -193,6 +194,21 @@ interface PagePayload {
     }
   }
 
+  // ===== Page CSS Update =====
+  function updatePageCss(css?: string) {
+    let styleEl = document.getElementById('__NL_PAGE_CSS__')
+    if (!css) {
+      if (styleEl) styleEl.remove()
+      return
+    }
+    if (!styleEl) {
+      styleEl = document.createElement('style')
+      styleEl.id = '__NL_PAGE_CSS__'
+      document.head.appendChild(styleEl)
+    }
+    styleEl.textContent = css
+  }
+
   // ===== Swap =====
   function swapWithPayload(payload: PagePayload): boolean {
     const el = document.querySelector('[data-page-content]') || document.querySelector('main')
@@ -200,6 +216,9 @@ interface PagePayload {
 
     // Update symbols first so <use> can find them
     updateSymbols(payload.symbols)
+    
+    // Update page-specific CSS
+    updatePageCss(payload.css)
 
     const frag = buildDom(payload.dom)
 

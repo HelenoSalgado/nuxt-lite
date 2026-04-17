@@ -42,6 +42,8 @@ export default defineNuxtModule<ModuleOptions>({
 
     const cssRules: Map<string, string> | null = null
     const globalUsedSelectors = new Set<string>()
+    const layoutSelectors = new Set<string>()
+    const routePageSelectors = new Map<string, Set<string>>()
     const routeSymbols = new Map<string, any[]>()
     const pageManifest: Record<string, { meta: any, domSize: number }> = {}
     const seoReports = new Map<string, import('./seo/types').SeoReport>()
@@ -64,8 +66,20 @@ export default defineNuxtModule<ModuleOptions>({
         
         let html = route.contents as string
 
-        // 1. Process Page (Clean, Inject Runtime script tag, etc.)
-        const { html: processedHtml, usedSelectors, symbols } = processPageContent(html, extendedOptions, '')
+        // 1. Extract used selectors BEFORE processing for more granular control
+        const { extractUsedSelectors } = await import('./html/extract')
+        const selectors = extractUsedSelectors(html, options.safelist)
+        selectors.layout.forEach(s => {
+          layoutSelectors.add(s)
+          globalUsedSelectors.add(s)
+        })
+        selectors.page.forEach(s => {
+          globalUsedSelectors.add(s)
+        })
+        routePageSelectors.set(normalizedRoute, selectors.page)
+
+        // 2. Process Page (Clean, Inject Runtime script tag, etc.)
+        const { html: processedHtml, symbols } = processPageContent(html, extendedOptions, '')
         html = processedHtml
 
         // Store symbols for payload later
@@ -73,7 +87,7 @@ export default defineNuxtModule<ModuleOptions>({
           routeSymbols.set(normalizedRoute, Array.from(symbols.values()))
         }
 
-        // 1b. SEO Processing (if enabled)
+        // 2b. SEO Processing (if enabled)
         if (seoConfig.enabled && !seoReports.has(normalizedRoute)) {
           const { processSeoMeta } = await import('./seo/metatags')
           const { analyzeDom, domAnalysisToSeoIssues } = await import('./seo/dom-analysis')
@@ -97,11 +111,6 @@ export default defineNuxtModule<ModuleOptions>({
           const scoreColor = seoResult.report.score >= 90 ? '\x1B[32m' : seoResult.report.score >= 70 ? '\x1B[33m' : '\x1B[31m'
           const reset = '\x1B[0m'
           console.log(`  [nuxt-lite:seo] ${normalizedRoute} — Score: ${scoreColor}${seoResult.report.score}${reset}/100`)
-        }
-
-        // Accumulate selectors for global CSS mode
-        if (cssMode === 'file') {
-          usedSelectors.forEach(s => globalUsedSelectors.add(s))
         }
 
         // 2. Inject SLOT markers around <main> for payload extraction
@@ -179,47 +188,22 @@ export default defineNuxtModule<ModuleOptions>({
       writeFileSync(runtimePath, runtimeSrc, 'utf-8')
 
       // 2. CSS Optimization
+      let globalRules: Map<string, string> | null = null
       if (cssMode !== 'none') {
         const allCss = collectAllCssFiles(outputDir)
         if (allCss.size > 0) {
           let combined = ''
           for (const [, content] of allCss) combined += content + ' '
-          const rules = parseCssRules(combined)
+          globalRules = parseCssRules(combined)
 
           if (cssMode === 'file') {
-            const optimized = filterCssBySelectors(rules, globalUsedSelectors)
+            const optimized = filterCssBySelectors(globalRules, layoutSelectors)
             const cssDir = join(outputDir, 'css')
             if (!existsSync(cssDir)) mkdirSync(cssDir, { recursive: true })
             const outPath = join(cssDir, 'optimized.css')
             writeFileSync(outPath, optimized, 'utf-8')
             removeRedundantCssFiles(outputDir, outPath)
-            console.log(`  │  ✓ CSS optimized:    ${(optimized.length / 1024).toFixed(1)}KB`)
-          }
-          else if (cssMode === 'inline') {
-            // In inline mode, we have to re-read HTML because we didn't have the CSS rules
-            // during prerender:generate (chicken-and-egg problem)
-            // This is the ONLY time we read HTML back.
-            const htmlFiles: string[] = []
-            function collectHtml(d: string) {
-              for (const entry of readdirSync(d)) {
-                const full = join(d, entry)
-                if (statSync(full).isDirectory()) collectHtml(full)
-                else if (entry === 'index.html') htmlFiles.push(full)
-              }
-            }
-            collectHtml(outputDir)
-
-            for (const path of htmlFiles) {
-              let html = readFileSync(path, 'utf-8')
-              const used = new Set(globalUsedSelectors) // Fallback or re-extract
-              // For accuracy, we re-extract used selectors from the processed HTML
-              const { extractUsedSelectors } = await import('./html/extract')
-              const currentUsed = extractUsedSelectors(html, options.safelist)
-              const optimized = filterCssBySelectors(rules, currentUsed)
-              html = html.replace('</head>', `<style>${optimized}</style></head>`)
-              writeFileSync(path, html, 'utf-8')
-            }
-            console.log(`  │  ✓ CSS inlined:      ${htmlFiles.length} pages`)
+            console.log(`  │  ✓ Global CSS:       ${(optimized.length / 1024).toFixed(1)}KB`)
           }
         }
       }
@@ -248,6 +232,7 @@ export default defineNuxtModule<ModuleOptions>({
         let routePath = relPath.replace(/(^|\/)index\.html$/, '').replace(/\\/g, '/')
         if (routePath.endsWith('.html')) routePath = routePath.replace(/\.html$/, '')
         const route = routePath === '' ? '/' : '/' + routePath.replace(/\/$/, '') + '/'
+        const normalizedRoute = route === '/' ? '/' : route.replace(/\/$/, '')
 
         const startIdx = html.indexOf('<!--NL:SLOT_START-->')
         const endIdx = html.indexOf('<!--NL:SLOT_END-->')
@@ -255,13 +240,20 @@ export default defineNuxtModule<ModuleOptions>({
           const slotHtml = html.substring(startIdx + '<!--NL:SLOT_START-->'.length, endIdx)
           
           // Get symbols for this route
-          const normalizedRoute = route === '/' ? '/' : route.replace(/\/$/, '')
           const symbols = routeSymbols.get(normalizedRoute) || []
+
+          // Generate page-specific CSS
+          let pageCss = ''
+          if (globalRules && cssMode !== 'none') {
+            const pageSelectors = routePageSelectors.get(normalizedRoute) || new Set()
+            pageCss = filterCssBySelectors(globalRules, pageSelectors)
+          }
 
           const payload = { 
             dom: extractSlotContent(slotHtml), 
             meta: extractMetaTags(html),
-            symbols
+            symbols,
+            css: pageCss || undefined
           }
 
           let payloadPath: string
@@ -276,8 +268,22 @@ export default defineNuxtModule<ModuleOptions>({
           writeFileSync(payloadPath, JSON.stringify(payload), 'utf-8')
           totalPayloads++
 
+          // Handle HTML updates
           // Remove markers from the final HTML
           html = html.replace('<!--NL:SLOT_START-->', '').replace('<!--NL:SLOT_END-->', '')
+
+          // Inline mode CSS injection
+          if (cssMode === 'inline' && globalRules) {
+            const pageSelectors = routePageSelectors.get(normalizedRoute) || new Set()
+            const fullSelectors = new Set([...layoutSelectors, ...pageSelectors])
+            const optimized = filterCssBySelectors(globalRules, fullSelectors)
+            html = html.replace('</head>', `<style>${optimized}</style></head>`)
+          } else if (cssMode === 'file' && pageCss) {
+             // Optional: we could also inject the initial page CSS inline to avoid a jump if it's large
+             // but keeping it in payload for now as requested.
+             // However, for the initial load to be correct, we should probably inline the initial page CSS
+             html = html.replace('</head>', `<style id="__NL_PAGE_CSS__">${pageCss}</style></head>`)
+          }
 
           // Inject the sprite container into the final HTML (only symbols for this route)
           if (symbols.length > 0) {

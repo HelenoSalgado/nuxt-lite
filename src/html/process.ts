@@ -25,7 +25,8 @@ export function processPageContent(
   const { _cssMode: cssMode, safelist = [], _svgResolved: svgConfig } = options
 
   // 1. Extract used selectors BEFORE stripping CSS/Scripts to be safe
-  const usedSelectors = extractUsedSelectors(html, safelist)
+  const { layout, page } = extractUsedSelectors(html, safelist)
+  const usedSelectors = new Set([...layout, ...page])
 
   // 2. CSS optimization
   if (cssMode !== 'none') {
