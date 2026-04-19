@@ -29,6 +29,7 @@ interface PagePayload {
     twitter?: Record<string, string>
   }
   symbols?: { id: string, content: string, attributes: string }[]
+  css?: string
 }
 
 (function () {
@@ -197,6 +198,17 @@ interface PagePayload {
   function swapWithPayload(payload: PagePayload): boolean {
     const el = document.querySelector('[data-page-content]') || document.querySelector('main')
     if (!el || !payload || !payload.dom) return false
+
+    // Update dynamic CSS
+    if (payload.css !== undefined) {
+      let dynamicStyle = document.querySelector('style[data-nl-dynamic]')
+      if (!dynamicStyle) {
+        dynamicStyle = document.createElement('style')
+        dynamicStyle.setAttribute('data-nl-dynamic', '')
+        document.head.appendChild(dynamicStyle)
+      }
+      dynamicStyle.textContent = payload.css
+    }
 
     // Update symbols first so <use> can find them
     updateSymbols(payload.symbols)

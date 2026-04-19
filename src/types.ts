@@ -112,15 +112,10 @@ export interface ColorModeOptions {
 export interface ModuleOptions {
   /**
    * Optimize CSS output.
-   * - `true` | `'inline'`: Tree-shake CSS per-page and inline into `<style>`
-   * - `'file'`: Tree-shake globally and output single `/css/optimized.css`
-   * - `false`: Skip CSS optimization (default Nuxt/Vite behavior)
+   * Tree-shake CSS, inline layout CSS, and inject dynamic page CSS inline and in payload.
    * @default false
    */
-  optimizeCss?: boolean | 'inline' | 'file'
-
-  /** @deprecated Use `optimizeCss` instead */
-  inlineStyles?: boolean
+  optimizeCss?: boolean
 
   /**
    * Strip Vue/Nuxt SSR attributes from HTML output.
@@ -134,13 +129,6 @@ export interface ModuleOptions {
    * @default true
    */
   cleanHtml?: boolean
-
-  /**
-   * Extract and inline critical CSS (layout).
-   * If true, CSS found outside the dynamic content area (main) will be inlined.
-   * @default false
-   */
-  criticalCss?: boolean
 
   /**
    * List of CSS classes or selectors to preserve from tree-shaking.
@@ -179,17 +167,14 @@ export interface ModuleOptions {
 // Internal types
 // ============================================================================
 
-export type CssMode = 'inline' | 'file' | 'none'
 export type SeoMode = 'analyze' | 'fix' | 'none'
 
 export interface ExtendedOptions extends ModuleOptions {
-  _cssMode: CssMode
   _seoMode: SeoMode
   _seoResolved: SeoOptions & { enabled: boolean }
   _svgResolved: SvgOptions & { enabled: boolean }
   _colorResolved: ColorModeOptions & { enabled: boolean }
   _buildAssetsDir: string
-  criticalCss: boolean
 }
 
 // ============================================================================
@@ -251,14 +236,6 @@ export const PRESERVE_AT_RULE_RE = /^@(?:font-face|keyframes|-webkit-keyframes)\
 // ============================================================================
 // Pure helpers (no side effects)
 // ============================================================================
-
-export function resolveCssMode(options: ModuleOptions): CssMode {
-  if (options.optimizeCss === 'file') return 'file'
-  if (options.optimizeCss === 'inline') return 'inline'
-  if (options.optimizeCss === true) return 'inline'
-  if (options.inlineStyles) return 'inline'
-  return 'none'
-}
 
 export function resolveSeoMode(options: ModuleOptions): SeoMode {
   const seo = options.optimizeSeo

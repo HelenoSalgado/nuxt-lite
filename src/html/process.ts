@@ -14,7 +14,7 @@ import type { Document } from 'linkedom'
 // ============================================================================
 // Type imports
 // ============================================================================
-import type { ColorModeOptions, CssMode, ExtendedOptions } from '../types'
+import type { ColorModeOptions, ExtendedOptions } from '../types'
 import type { SvgSymbol } from './svg'
 
 // ============================================================================
@@ -42,17 +42,17 @@ export interface PageProcessResult {
 export function processPageContent(
   html: string,
   options: ExtendedOptions,
-  runtimeSrc: string
+  _runtimeSrc: string,
 ): PageProcessResult {
   const { document } = parseHTML(html)
-  const { _cssMode: cssMode, safelist = [], _svgResolved: svgConfig } = options
+  const { optimizeCss, safelist = [], _svgResolved: svgConfig } = options
 
   // 1. Extract used selectors BEFORE stripping CSS/Scripts to be safe
   const usedSelectors = extractUsedSelectors(html, safelist)
 
   // 2. CSS optimization
-  if (cssMode !== 'none') {
-    optimizeCSS(document, cssMode)
+  if (optimizeCss) {
+    stripExistingCss(document)
   }
 
   // 3 & 4. Strip runtime artifacts
@@ -95,24 +95,6 @@ export function processPageContent(
 // ============================================================================
 // Helper Functions
 // ============================================================================
-
-function optimizeCSS(document: Document, cssMode: CssMode): void {
-  stripExistingCss(document)
-
-  // In 'file' mode, we can already inject the link to the optimized file
-  if (cssMode === 'file') {
-    const preload = document.createElement('link')
-    preload.setAttribute('rel', 'preload')
-    preload.setAttribute('as', 'style')
-    preload.setAttribute('href', '/css/optimized.css')
-    document.head.prepend(preload)
-
-    const link = document.createElement('link')
-    link.setAttribute('rel', 'stylesheet')
-    link.setAttribute('href', '/css/optimized.css')
-    document.head.appendChild(link)
-  }
-}
 
 function stripRuntimeArtifacts(
   document: Document,

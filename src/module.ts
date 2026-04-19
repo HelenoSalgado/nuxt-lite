@@ -8,7 +8,7 @@
 // ============================================================================
 // Node stdlib
 // ============================================================================
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 
 // ============================================================================
@@ -24,16 +24,14 @@ import type { ExtendedOptions, ModuleOptions } from './types'
 // ============================================================================
 // Local imports - utils
 // ============================================================================
-import { findOutputDir, resolveColorConfig, resolveCssMode, resolveSeoConfig, resolveSvgConfig } from './types'
+import { findOutputDir, resolveColorConfig, resolveSeoConfig, resolveSvgConfig } from './types'
 
 // ============================================================================
 // Local imports - modules
 // ============================================================================
-import { filterCssBySelectors } from './css/filter'
 import { parseCssRules } from './css/parser'
-import { collectAllCssFiles, pruneNuxtArtifacts, removeRedundantCssFiles } from './fs'
+import { collectAllCssFiles, pruneNuxtArtifacts } from './fs'
 import { processPageContent } from './html/process'
-import { generateSpriteContainer } from './html/svg'
 
 export type { ModuleOptions } from './types'
 
@@ -45,25 +43,21 @@ export default defineNuxtModule<ModuleOptions>({
   },
   defaults: {
     optimizeCss: false,
-    inlineStyles: false,
     cleanHtml: true,
     safelist: [],
   },
   setup(options, nuxt) {
     const resolver = createResolver(import.meta.url)
-    const cssMode = resolveCssMode(options)
     const seoConfig = resolveSeoConfig(options)
     const svgConfig = resolveSvgConfig(options)
     const colorConfig = resolveColorConfig(options)
     const extendedOptions: ExtendedOptions = {
       ...options,
-      _cssMode: cssMode,
       _seoMode: seoConfig.mode,
       _seoResolved: { ...seoConfig.settings, enabled: seoConfig.enabled },
       _svgResolved: { ...svgConfig.settings, enabled: svgConfig.enabled },
       _colorResolved: { ...colorConfig.settings, enabled: colorConfig.enabled },
       _buildAssetsDir: nuxt.options.app.buildAssetsDir || '/_nuxt/',
-      criticalCss: options.criticalCss ?? false,
     }
 
     if (nuxt.options.dev) return
@@ -126,7 +120,7 @@ export default defineNuxtModule<ModuleOptions>({
         }
 
         // Accumulate selectors for global CSS mode
-        if (cssMode === 'file') {
+        if (options.optimizeCss) {
           usedSelectors.forEach(s => globalUsedSelectors.add(s))
         }
 
@@ -207,7 +201,7 @@ export default defineNuxtModule<ModuleOptions>({
       let totalPayloads = 0
 
       // 2. CSS Optimization & Page Processing
-      if (cssMode !== 'none' || options.cleanHtml) {
+      if (options.optimizeCss || options.cleanHtml) {
         const allCss = collectAllCssFiles(outputDir)
         let combined = ''
         for (const [, content] of allCss) combined += content + ' '
@@ -231,14 +225,17 @@ export default defineNuxtModule<ModuleOptions>({
             if (entry.startsWith('.') || (entry.startsWith('_') && entry !== '_nuxt')) continue
             const full = join(d, entry)
             const st = statSync(full)
-            if (st.isDirectory()) { collectHtml(full); continue }
+            if (st.isDirectory()) {
+              collectHtml(full)
+              continue
+            }
             if (entry === 'index.html' || entry.endsWith('.html')) htmlFiles.push(full)
           }
         }
         collectHtml(outputDir)
 
         const { parseHTML } = await import('linkedom')
-        const { stripDataVAttributes, stripNuxtScripts } = await import('./html/clean')
+        const { stripDataVAttributes } = await import('./html/clean')
         const { extractUsedSelectors } = await import('./html/extract')
         const { extractSlotContent, extractMetaTags } = await import('./html/serialize')
         const { filterCssToMap, rulesMapToCss } = await import('./css/filter')
@@ -257,14 +254,58 @@ export default defineNuxtModule<ModuleOptions>({
           const endIdx = html.indexOf('<!--NL:SLOT_END-->')
 
           if (startIdx !== -1 && endIdx !== -1) {
-            const slotHtml = html.substring(startIdx + '<!--NL:SLOT_START-->'.length, endIdx)
+            let slotHtml = html.substring(startIdx + '<!--NL:SLOT_START-->'.length, endIdx)
+
+            // B) Strip data-v (Short-hashing only for alive hashes)
+            if (options.cleanHtml) {
+              stripDataVAttributes(document, dataVMapping)
+
+              // Apply short-hashes to the slotHtml for the payload as well
+              dataVMapping.forEach((shortHash, originalHash) => {
+                slotHtml = slotHtml.replace(new RegExp(`data-v-${originalHash}`, 'g'), `data-v-${shortHash}`)
+              })
+            }
+
             const normalizedRoute = route === '/' ? '/' : route.replace(/\/$/, '')
             const symbols = routeSymbols.get(normalizedRoute) || []
+
+            // C) CSS Extraction
+            let dynamicCss = ''
+            if (options.optimizeCss && rules.size > 0) {
+              const layoutSelectors = extractUsedSelectors(document.toString(), options.safelist, '[data-page-content], main')
+              const criticalRules = filterCssToMap(rules, layoutSelectors, dataVMapping)
+              const criticalCss = rulesMapToCss(criticalRules)
+
+              if (criticalCss) {
+                const styleEl = document.createElement('style')
+                styleEl.setAttribute('data-nl-critical', '')
+                styleEl.textContent = criticalCss
+                document.head.appendChild(styleEl)
+              }
+
+              const currentUsed = extractUsedSelectors(document.toString(), options.safelist)
+              const allPageRules = filterCssToMap(rules, currentUsed, dataVMapping)
+
+              if (criticalRules.size > 0) {
+                for (const key of criticalRules.keys()) {
+                  allPageRules.delete(key)
+                }
+              }
+
+              dynamicCss = rulesMapToCss(allPageRules)
+              if (dynamicCss) {
+                const styleEl = document.createElement('style')
+                styleEl.setAttribute('data-nl-dynamic', '')
+                styleEl.textContent = dynamicCss
+                document.head.appendChild(styleEl)
+              }
+            }
 
             const payload = {
               dom: extractSlotContent(slotHtml),
               meta: extractMetaTags(html),
               symbols,
+              css: dynamicCss || undefined,
             }
 
             let payloadPath: string
@@ -276,46 +317,6 @@ export default defineNuxtModule<ModuleOptions>({
             }
             writeFileSync(payloadPath, JSON.stringify(payload), 'utf-8')
             totalPayloads++
-
-            // B) Strip data-v (Short-hashing only for alive hashes)
-            if (options.cleanHtml) {
-              stripDataVAttributes(document, dataVMapping)
-            }
-
-            // C) CSS Extraction with Duplication Prevention
-            let criticalRules = new Map<string, string>()
-
-            if (options.criticalCss && rules.size > 0) {
-              const layoutSelectors = extractUsedSelectors(document.toString(), options.safelist, '[data-page-content], main')
-              criticalRules = filterCssToMap(rules, layoutSelectors, dataVMapping)
-              const criticalCss = rulesMapToCss(criticalRules)
-
-              if (criticalCss) {
-                const styleEl = document.createElement('style')
-                styleEl.setAttribute('data-nl-critical', '')
-                styleEl.textContent = criticalCss
-                document.head.appendChild(styleEl)
-              }
-            }
-
-            if (cssMode === 'inline') {
-              const currentUsed = extractUsedSelectors(document.toString(), options.safelist)
-              const allPageRules = filterCssToMap(rules, currentUsed, dataVMapping)
-
-              // SUBTRACT critical rules from the full set to avoid duplication
-              if (criticalRules.size > 0) {
-                for (const key of criticalRules.keys()) {
-                  allPageRules.delete(key)
-                }
-              }
-
-              const optimized = rulesMapToCss(allPageRules)
-              if (optimized) {
-                const styleEl = document.createElement('style')
-                styleEl.textContent = optimized
-                document.head.appendChild(styleEl)
-              }
-            }
 
             // E) Final HTML cleanup
             let finalHtml = document.toString()
@@ -334,16 +335,7 @@ export default defineNuxtModule<ModuleOptions>({
           }
         }
 
-        if (cssMode === 'file') {
-          const optimized = filterCssBySelectors(rules, globalUsedSelectors, dataVMapping)
-          const cssDir = join(outputDir, 'css')
-          if (!existsSync(cssDir)) mkdirSync(cssDir, { recursive: true })
-          const outPath = join(cssDir, 'optimized.css')
-          writeFileSync(outPath, optimized, 'utf-8')
-          removeRedundantCssFiles(outputDir, outPath)
-          console.log(`  │  ✓ CSS optimized:    ${(optimized.length / 1024).toFixed(1)}KB`)
-        }
-        else if (cssMode === 'inline') {
+        if (options.optimizeCss) {
           console.log(`  │  ✓ CSS inlined:      ${htmlFiles.length} pages`)
         }
       }
