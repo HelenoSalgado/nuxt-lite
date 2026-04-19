@@ -1,177 +1,301 @@
 ---
 title: 'Instalação e Configuração'
-description: 'Guia completo de instalação e configuração do nuxt-lite no seu projeto Nuxt 4.'
+description: 'Guia completo de instalação e configuração do nuxt-lite no seu projeto Nuxt 4. Aprenda todas as opções disponíveis.'
 navigation:
   title: 'Instalação'
   icon: '📦'
 seo:
-  keywords: ['instalação', 'configuração', 'nuxt config', 'setup', 'optimizeCss', 'optimizeSeo']
+  keywords: ['instalação', 'configuração', 'nuxt config', 'setup', 'optimizeCss', 'optimizeSeo', 'payloadCache', 'prefetch']
   ogType: 'article'
 meta:
   author: 'nuxt-lite team'
   category: 'guia'
   tags: ['instalação', 'configuração', 'nuxt.config.ts', 'opções']
-  version: '0.0.1'
-  lastUpdated: '2026-04-14'
+  version: '1.0.0'
+  lastUpdated: '2026-04-19'
 toc: true
 ---
 
-# Instalação e Configuração
+# 📦 Instalação e Configuração
 
-## Instalação
+## Pré-requisitos
 
-Adicione o nuxt-lite ao seu `nuxt.config.ts`. Ele deve ser o **primeiro** módulo da lista:
+- ✅ Nuxt 4.x
+- ✅ `nuxt generate` (sites estáticos)
+- ✅ Node.js 18+
 
-```ts [nuxt.config.ts]
+---
+
+## Instalação Rápida
+
+### 1. Adicione ao `nuxt.config.ts`
+
+```typescript [nuxt.config.ts]
 export default defineNuxtConfig({
   modules: [
-    'nuxt-lite', // ← deve ser o primeiro módulo
+    './nuxt-lite/src/module',  // ⚠️ DEVE ser o PRIMEIRO módulo
+    '@nuxt/content',
+    '@nuxt/image',
     // ... outros módulos
   ],
+  
   nuxtLite: {
-    optimizeCss: 'inline',
-    cleanHtml: true,
-  },
+    optimizeCss: true,          // Ativar otimização de CSS
+    cleanHtml: true,            // Remover artefatos Nuxt/Vue
+    safelist: ['is-active'],    // Classes a preservar
+    optimizeSeo: 'analyze',     // Analisar SEO
+    pruneOutput: true,          // Limpar artifacts não utilizados
+  }
 })
 ```
+
+### 2. Execute o build
+
+```bash
+npm run generate
+```
+
+✅ Pronto! Seu site está otimizado.
 
 ---
 
 ## Configurações
 
-### `optimizeCss`
+| Opção | Tipo | Padrão | Descrição |
+|-------|------|--------|-----------|
+| `optimizeCss` | boolean | `false` | Ativar purga de CSS não utilizado (tree-shaking) |
+| `safelist` | string[] | `[]` | Classes/seletores a preservar durante tree-shaking |
+| `cleanHtml` | boolean | `true` | Remover `__NUXT_DATA__`, comentários, scripts |
+| `optimizeSeo` | boolean \| string | `false` | `'analyze'` = reportar issues, `'fix'` = auto-corrigir |
+| `pruneOutput` | boolean | `false` | Remover `.js`, `.map` não utilizados |
 
-Controla como o CSS é processado e entregue.
+---
 
-| Valor | Comportamento | Ideal para |
-|---|---|---|
-| `false` | Desativado (padrão) | Desenvolvimento |
-| `'inline'` | CSS por página, injetado no `<style>` | Sites pequenos |
-| `'file'` | Arquivo CSS global otimizado | Sites grandes |
+## Opções Detalhadas
 
-```ts [nuxt.config.ts]
-export default defineNuxtConfig({
-  nuxtLite: {
-    optimizeCss: 'inline', // CSS tree-shaked por página
-  },
-})
+### `optimizeCss: boolean`
+
+Ativa o tree-shaking automático de CSS — remove seletores não utilizados em cada página.
+
+```typescript
+nuxtLite: {
+  optimizeCss: true,  // Ativa otimização
+}
+```
+
+**Antes:**
+```
+global.css: 45KB
+```
+
+**Depois:**
+```
+global.css:  2KB (por página)
+Redução:     ~95%
 ```
 
 ---
 
-### `safelist`
+### `safelist: string[]`
 
-Lista de classes CSS ou seletores que **não** devem ser removidos durante o tree-shaking.
+Lista de classes que **NÃO** devem ser removidas durante o tree-shaking.
 
-Útil para classes adicionadas dinamicamente via JavaScript no cliente.
+Útil para:
+- Classes adicionadas dinamicamente via JavaScript
+- Componentes com lógica condicional de classe
 
-```ts [nuxt.config.ts]
-export default defineNuxtConfig({
-  nuxtLite: {
-    optimizeCss: 'inline',
-    safelist: ['is-active', '.dropdown-open', '[data-tooltip]'],
-  },
-})
+```typescript
+nuxtLite: {
+  optimizeCss: true,
+  safelist: [
+    'is-active',      // Links ativos
+    'is-open',        // Menus abertos
+    'dark-mode',      // Tema escuro
+    '[data-tooltip]', // Atributos customizados
+  ],
+}
 ```
 
 ---
 
-### `cleanHtml`
+### `cleanHtml: boolean`
 
-Remove artefatos do Nuxt/Vue do HTML final:
+Remove artefatos desnecessários do SSR:
 
-- Scripts `__NUXT_DATA__`
-- Tags `<script type="module">` do Vue
-- Links `modulepreload`
-- Scripts de prefetch
-- Comentários Vue (`<!--[-->`, `<!--]-->`)
+- ❌ Scripts `__NUXT_DATA__`
+- ❌ Tags `<script type="module">`
+- ❌ Links `modulepreload`
+- ❌ Comentários Vue (`<!--[-->`)
+- ❌ Scripts de prefetch
 
-```ts [nuxt.config.ts]
-export default defineNuxtConfig({
-  nuxtLite: {
-    cleanHtml: true, // padrão: true
-  },
-})
+```typescript
+nuxtLite: {
+  cleanHtml: true,  // padrão: true
+}
+```
+
+**Antes:**
+```html
+<script id="__NUXT_DATA__" type="application/json">
+  {"payload":{"data":...}}
+</script>
+```
+
+**Depois:**
+```html
+<!-- Removido completamente -->
 ```
 
 ---
 
-### `optimizeSeo`
+### `optimizeSeo: boolean | 'analyze' | 'fix'`
 
-Ativa análise e correção automática de SEO durante o build.
+Valida e corrige automaticamente problemas de SEO.
 
-```ts [nuxt.config.ts]
-export default defineNuxtConfig({
-  nuxtLite: {
-    optimizeSeo: true, // ou 'analyze' | 'fix'
-  },
-})
+```typescript
+// Desativado
+nuxtLite: {
+  optimizeSeo: false,  // padrão
+}
+
+// Apenas análise
+nuxtLite: {
+  optimizeSeo: 'analyze',
+}
+
+// Auto-corrige + análise
+nuxtLite: {
+  optimizeSeo: 'fix',
+}
 ```
 
-| Valor | Comportamento |
-|---|---|
-| `false` | Desativado (padrão) |
-| `true` / `'analyze'` | Analisa e reporta issues |
-| `'fix'` | Auto-corrige issues + reporta |
+#### O que é verificado
 
-#### Opções avançadas de SEO
+**Metatags:**
+- ✅ Presença de `title`, `description`, `canonical`
+- ✅ Open Graph (`og:title`, `og:image`, etc.)
+- ✅ Twitter Card
+- ✅ Tamanho de texto (title: 30-60 chars, description: 120-160 chars)
 
-```ts [nuxt.config.ts]
+**Estrutura do DOM:**
+- ✅ Apenas 1 `<h1>` por página
+- ✅ Hierarquia correta de headings
+- ✅ Sem aninhamento excessivo (>8 níveis = erro)
+- ✅ `alt` em todas as imagens
+- ✅ Texto em todos os links
+
+#### Output
+
+```
+[nuxt-lite:seo] /blog — Score: 92/100
+[nuxt-lite:seo] /about — Score: 88/100
+
+┌─ nuxt-lite: SEO Analysis Summary ─────┐
+│ Pages analyzed:  2                    │
+│ Total issues:    4                    │
+│ Average score:   90/100               │
+└───────────────────────────────────────┘
+
+📄 Relatório: .seo/analise.md
+```
+
+---
+
+### `pruneOutput: boolean`
+
+Remove arquivos não utilizados da pasta de output:
+
+- ❌ `.js` não referenciados
+- ❌ `.map` (source maps)
+- ❌ Artefatos Nuxt/Vue
+
+```typescript
+nuxtLite: {
+  pruneOutput: true,  // Limpar bloat
+}
+```
+
+---
+
+## Exemplo Completo
+
+```typescript [nuxt.config.ts]
 export default defineNuxtConfig({
+  modules: [
+    './nuxt-lite/src/module',
+    '@nuxt/content',
+    '@nuxt/image',
+    '@nuxtjs/sitemap',
+  ],
+
   nuxtLite: {
+    // CSS
+    optimizeCss: true,
+    safelist: [
+      'is-active',
+      'is-open',
+      'dark-mode',
+      'hidden',
+    ],
+
+    // HTML
+    cleanHtml: true,
+
+    // SEO
     optimizeSeo: {
-      optimizeSeo: 'fix',
-      maxDomDepth: {
-        warning: 5,
-        error: 8,
-      },
-      autoReplicate: true,
-      autoInject: true,
+      mode: 'fix',
       failOnError: false,
       writeReport: true,
     },
+
+    // Cleanup
+    pruneOutput: true,
   },
 })
 ```
 
 ---
 
-## Estrutura de Layout
+## 🏗️ Estrutura de Layout
 
 O nuxt-lite substitui o conteúdo dentro de `<main>` ou `[data-page-content]`.
 
-Envolva o conteúdo variável no seu layout:
-
 ```vue [layouts/default.vue]
 <template>
-  <div>
-    <header>
+  <div class="app">
+    <!-- Fixo em todas as páginas -->
+    <header class="navbar">
       <nav>
         <NuxtLink to="/">Home</NuxtLink>
+        <NuxtLink to="/blog">Blog</NuxtLink>
         <NuxtLink to="/sobre">Sobre</NuxtLink>
       </nav>
     </header>
 
+    <!-- ⬅️ Este conteúdo é trocado na navegação SPA -->
     <main data-page-content>
       <slot />
     </main>
 
-    <footer>
-      <p>&copy; 2024 Meu Site</p>
+    <!-- Fixo em todas as páginas -->
+    <footer class="footer">
+      <p>&copy; 2026 Meu Site</p>
     </footer>
   </div>
 </template>
 ```
 
 ::callout{type="warning"}
-Header, footer e navegação devem estar **fora** do `<main>` para não serem substituídos durante a navegação SPA.
+**⚠️ Importante**
+
+Header, footer e navegação **devem estar fora do `<main>`** para não serem substituídos durante a navegação SPA.
 ::
 
 ---
 
-## Transições CSS
+## 🎬 Transições CSS
 
-Defina as classes de transição no seu CSS global:
+Defina transições suaves entre páginas:
 
 ```css [assets/css/transitions.css]
 .page-enter-active,
@@ -182,21 +306,34 @@ Defina as classes de transição no seu CSS global:
 .page-enter-from,
 .page-leave-to {
   opacity: 0;
+  filter: blur(1rem);
 }
 ```
 
+O runtime aplica automaticamente:
+1. `page-leave-active` + `page-leave-from` ao sair
+2. Aguarda transição CSS
+3. `page-enter-active` + `page-enter-from` ao entrar
+4. Remove classes após conclusão
+
 ---
 
-## Exemplo Completo
+## 🚀 Próximos Passos
 
-```ts [nuxt.config.ts]
-export default defineNuxtConfig({
-  modules: ['nuxt-lite'],
-  nuxtLite: {
-    optimizeCss: 'inline',
-    safelist: ['is-active', '.open'],
-    cleanHtml: true,
-    optimizeSeo: 'fix',
-  },
-})
+- 🔧 [Como Funciona →](./2.how-it-works)
+- 🔍 [SEO Analysis →](./3.seo)
+- 🎨 [CSS Optimization →](./4.css-optimization)
+- ⚙️ [Runtime →](./5.runtime)
+
+---
+
+::callout{type="success"}
+**Deploy**
+
+O nuxt-lite gera um site completamente estático. Pode ser deployado em qualquer host:
+
+```bash
+npm run generate
+# Deploy em Vercel, Netlify, Cloudflare Pages, etc.
 ```
+::
