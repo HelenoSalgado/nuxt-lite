@@ -7,6 +7,8 @@
  * Preserves: tags, attributes (corrected SVG viewBox), text, comments
  */
 
+import { extractMetaTagsFast } from '../utils/meta'
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -322,31 +324,11 @@ export function extractSlotContent(html: string): DomNode[] {
 }
 
 export function extractMetaTags(html: string): PagePayload['meta'] {
-  const meta: PagePayload['meta'] = { title: '', og: {}, twitter: {} }
-
-  const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)
-  if (titleMatch) meta.title = titleMatch[1]!.trim()
-
-  const metaRe = /<meta\s+([^>]+)>/gi
-  let m: RegExpExecArray | null
-  while ((m = metaRe.exec(html)) !== null) {
-    const attrs = parseAttrs(m[1]!)
-    const name = attrs.name || attrs.property
-    const content = attrs.content || ''
-    if (!name) continue
-    if (name === 'description') meta.description = content
-    else if (name.startsWith('og:')) (meta.og!)[name.slice(3)] = content
-    else if (name.startsWith('twitter:')) (meta.twitter!)[name.slice(8)] = content
-  }
-
-  const canonicalMatch = html.match(/<link[^>]*rel=["']canonical["'][^>]*href=["']([^"']+)["']/i)
-  if (canonicalMatch) meta.canonical = canonicalMatch[1]
-
-  return meta
+  return extractMetaTagsFast(html)
 }
 
 export function serializePage(html: string): PagePayload {
-  return { dom: extractSlotContent(html), meta: extractMetaTags(html) }
+  return { dom: extractSlotContent(html), meta: extractMetaTagsFast(html) }
 }
 
 // ============================================================================

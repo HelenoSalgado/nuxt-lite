@@ -21,79 +21,14 @@ import {
   AUTO_REPLICATE_RULES as REPLICATION_RULES,
   META_LENGTH_LIMITS,
 } from './constants'
+import { extractMetaTagsSafe } from '../utils/meta'
 
 // ============================================================================
 // Parser — extrai todas as metatags do HTML
 // ============================================================================
 
 export function extractMetaTags(html: string): ExtractedMeta {
-  const meta: ExtractedMeta = {
-    title: '',
-    og: {},
-    twitter: {},
-    other: {},
-  }
-
-  const { document } = parseHTML(html)
-
-  // Title
-  const titleEl = document.querySelector('title')
-  if (titleEl) meta.title = titleEl.textContent?.trim() || ''
-
-  // Meta tags
-  const metaElements = document.querySelectorAll('meta')
-  metaElements.forEach((el) => {
-    const name = el.getAttribute('name') || el.getAttribute('property') || ''
-    const content = el.getAttribute('content') || ''
-    const httpEquiv = el.getAttribute('http-equiv')
-    const charset = el.getAttribute('charset')
-
-    if (charset) {
-      meta.charset = charset
-      return
-    }
-
-    if (httpEquiv) {
-      // http-equiv tags
-      if (httpEquiv.toLowerCase() === 'content-type' && content) {
-        const charsetMatch = content.match(/charset=([^;]+)/i)
-        if (charsetMatch) meta.charset = charsetMatch[1]!
-      }
-      return
-    }
-
-    if (!name && !el.getAttribute('name') && !el.getAttribute('property')) return
-
-    if (name === 'description') {
-      meta.description = content
-    }
-    else if (name === 'canonical') {
-      meta.canonical = content
-    }
-    else if (name === 'robots') {
-      meta.robots = content
-    }
-    else if (name === 'viewport') {
-      meta.viewport = content
-    }
-    else if (name.startsWith('og:')) {
-      meta.og[name.slice(3)] = content
-    }
-    else if (name.startsWith('twitter:')) {
-      meta.twitter[name.slice(8)] = content
-    }
-    else if (name) {
-      meta.other[name] = content
-    }
-  })
-
-  // Canonical link
-  const canonicalLink = document.querySelector('link[rel="canonical"]')
-  if (canonicalLink && !meta.canonical) {
-    meta.canonical = canonicalLink.getAttribute('href') || ''
-  }
-
-  return meta
+  return extractMetaTagsSafe(html)
 }
 
 // ============================================================================
