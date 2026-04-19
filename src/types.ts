@@ -182,7 +182,7 @@ export interface ExtendedOptions extends ModuleOptions {
 // ============================================================================
 
 export const ESSENTIAL_SELECTORS = Object.freeze([
-  'html', 'body', 'head', ':root', '.dark',
+  'html', 'body', 'head', ':root', 'dark',
   'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
   'p', 'a', 'span', 'div', 'img', 'svg',
   'ul', 'ol', 'li', 'table', 'tr', 'td', 'th',
@@ -193,7 +193,7 @@ export const ESSENTIAL_SELECTORS = Object.freeze([
   'page-enter-active', 'page-enter-from', 'page-enter-to',
   'page-leave-active', 'page-leave-from', 'page-leave-to',
   // JS-driven UI classes (not present in static HTML, added dynamically)
-  '.header-hidden', '.open',
+  'header-hidden', 'open',
 ]) as ReadonlyArray<string>
 
 // File patterns to exclude from CSS collection

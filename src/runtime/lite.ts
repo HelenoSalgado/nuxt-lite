@@ -42,6 +42,7 @@ interface PagePayload {
   let transitionMs: number = 0
   let navigating = false
   let currentRoute: string = normalizeHref(location.pathname)
+  const payloadCache = new Map<string, Promise<PagePayload | null>>()
 
   // ===== Reactive System =====
   function createReactive<T extends object>(obj: T): T {
@@ -94,6 +95,17 @@ interface PagePayload {
       console.error('[nuxt-lite] fetch error:', e)
       return null
     }
+  }
+
+  function getPayloadUrl(route: string): string {
+    return route === '/' ? '/_payload.json' : route + '_payload.json'
+  }
+
+  function cachedFetchPayload(route: string): Promise<PagePayload | null> {
+    if (!payloadCache.has(route)) {
+      payloadCache.set(route, fetchJSON<PagePayload>(getPayloadUrl(route)))
+    }
+    return payloadCache.get(route)!
   }
 
   // ===== DOM Reconstruction =====
@@ -273,9 +285,8 @@ interface PagePayload {
       el.classList.remove('page-leave-from')
       el.classList.add('page-leave-to')
 
-      // Phase 2: Fetch Payload
-      const payloadUrl = route === '/' ? '/_payload.json' : route + '_payload.json'
-      const payloadPromise = fetchJSON<PagePayload>(payloadUrl)
+      // Phase 2: Fetch Payload (use cache)
+      const payloadPromise = cachedFetchPayload(route)
 
       // Wait for animation AND data
       const [payload] = await Promise.all([
@@ -331,6 +342,30 @@ interface PagePayload {
 
       e.preventDefault()
       navigate(href)
+    }, false)
+
+    // Prefetch on hover
+    const prefetchCache = new Set<string>()
+    document.addEventListener('mouseover', (e) => {
+      const link = (e.target as HTMLElement).closest('a[href]') as HTMLAnchorElement
+      if (!link) return
+
+      const href = link.getAttribute('href')
+      if (!isNuxtPage(href)) return
+
+      // Skip anchors (#)
+      if (href.includes('#')) return
+
+      const route = normalizeHref(href)
+      
+      // Skip current page
+      if (route === currentRoute) return
+      
+      // Skip if already prefetched
+      if (prefetchCache.has(route)) return
+
+      prefetchCache.add(route)
+      cachedFetchPayload(route)
     }, false)
 
     // Popstate (back/forward)

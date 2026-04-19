@@ -254,17 +254,18 @@ export default defineNuxtModule<ModuleOptions>({
           const endIdx = html.indexOf('<!--NL:SLOT_END-->')
 
           if (startIdx !== -1 && endIdx !== -1) {
-            let slotHtml = html.substring(startIdx + '<!--NL:SLOT_START-->'.length, endIdx)
-
-            // B) Strip data-v (Short-hashing only for alive hashes)
+            // B) Strip data-v (Short-hashing only for alive hashes) FIRST
             if (options.cleanHtml) {
               stripDataVAttributes(document, dataVMapping)
-
-              // Apply short-hashes to the slotHtml for the payload as well
-              dataVMapping.forEach((shortHash, originalHash) => {
-                slotHtml = slotHtml.replace(new RegExp(`data-v-${originalHash}`, 'g'), `data-v-${shortHash}`)
-              })
             }
+
+            // C) Extract slotHtml from the ALREADY PROCESSED document
+            let processedHtml = document.toString()
+            const processedStartIdx = processedHtml.indexOf('<!--NL:SLOT_START-->')
+            const processedEndIdx = processedHtml.indexOf('<!--NL:SLOT_END-->')
+            let slotHtml = (processedStartIdx !== -1 && processedEndIdx !== -1)
+              ? processedHtml.substring(processedStartIdx + '<!--NL:SLOT_START-->'.length, processedEndIdx)
+              : html.substring(startIdx + '<!--NL:SLOT_START-->'.length, endIdx)
 
             const normalizedRoute = route === '/' ? '/' : route.replace(/\/$/, '')
             const symbols = routeSymbols.get(normalizedRoute) || []
