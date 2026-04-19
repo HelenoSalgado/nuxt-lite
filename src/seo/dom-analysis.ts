@@ -1,20 +1,31 @@
 /**
- * dom-analysis.ts — Análise estrutural do DOM para SEO e acessibilidade
+ * dom-analysis.ts — DOM structural analysis for SEO and accessibility
  *
- * Verifica aninhamento excessivo, elementos inválidos, hierarquia de headings,
- * acessibilidade (alt, labels, etc.) e gera relatório estruturado.
+ * Checks for excessive nesting, invalid elements, heading hierarchy,
+ * accessibility (alt, labels, etc.), and generates a structured report.
  */
 
+// ============================================================================
+// External dependencies
+// ============================================================================
 import { parseHTML } from 'linkedom'
+
+// ============================================================================
+// Type imports
+// ============================================================================
 import type {
+  DomAccessibilityIssue,
   DomAnalysisResult,
   DomDepthIssue,
-  DomStructureIssue,
-  DomAccessibilityIssue,
   DomStats,
+  DomStructureIssue,
   SeoIssue,
   SeoSeverity,
 } from './types'
+
+// ============================================================================
+// Local imports
+// ============================================================================
 import {
   DEFAULT_DOM_DEPTH_LIMITS,
   RECOMMENDED_H1_COUNT,

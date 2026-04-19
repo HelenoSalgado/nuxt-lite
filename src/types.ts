@@ -1,6 +1,20 @@
-import type { Nuxt } from 'nuxt/schema'
+/**
+ * types.ts — Module options and shared constants
+ *
+ * Defines the public configuration for nuxt.config.ts,
+ * internal extended options, regex patterns, and resolution utilities.
+ */
+
+// ============================================================================
+// Node stdlib
+// ============================================================================
 import { existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
+
+// ============================================================================
+// External dependencies
+// ============================================================================
+import type { Nuxt } from 'nuxt/schema'
 
 // ============================================================================
 // Public API — module configuration for nuxt.config.ts

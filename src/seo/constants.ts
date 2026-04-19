@@ -1,9 +1,12 @@
-// ============================================================================
-// SEO Constants — Listas de tags essenciais, depreciadas e padrões de validação
-// ============================================================================
+/**
+ * constants.ts — SEO lists and patterns
+ *
+ * Provides lists of essential tags, deprecated tags, and
+ * validation patterns for SEO features.
+ */
 
 // ============================================================================
-// Meta tags essenciais que toda página deve ter
+// Essential Meta Tags
 // ============================================================================
 
 export const REQUIRED_META_TAGS = Object.freeze([

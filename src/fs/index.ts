@@ -1,6 +1,24 @@
-import { existsSync, readdirSync, statSync, readFileSync, unlinkSync, rmSync } from 'node:fs'
+/**
+ * index.ts — File system operations and cleanup
+ *
+ * Provides utilities to collect CSS files, remove redundant ones,
+ * and prune Nuxt/Vue artifacts to clean up the final output.
+ */
+
+// ============================================================================
+// Node stdlib
+// ============================================================================
+import { existsSync, readFileSync, readdirSync, rmSync, statSync, unlinkSync } from 'node:fs'
 import { join, relative } from 'node:path'
+
+// ============================================================================
+// Local imports
+// ============================================================================
 import { SKIP_CSS_FILES } from '../types'
+
+// ============================================================================
+// FS Utilities
+// ============================================================================
 
 /** Collect all .css files from the build output, keyed by their href path */
 export function collectAllCssFiles(rootDir: string): Map<string, string> {

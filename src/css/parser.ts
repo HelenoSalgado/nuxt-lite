@@ -1,4 +1,18 @@
+/**
+ * parser.ts — CSS parser for extraction
+ *
+ * Provides functionalities to parse CSS strings into maps
+ * using brace-counting to handle nested structures like @media.
+ */
+
+// ============================================================================
+// Local imports
+// ============================================================================
 import { CSS_COMMENT_RE, CSS_WS_RE, SKIP_AT_RULE_RE } from '../types'
+
+// ============================================================================
+// CSS Parser Methods
+// ============================================================================
 
 /**
  * Parse a CSS string into a Map<selector, fullRule>.

@@ -275,7 +275,7 @@ function tokensToDom(tokens: HtmlToken[]): DomNode[] {
       while (idx >= 0) {
         if (stack[idx]!.g === tagName) {
           const node = stack[idx]!
-          // Otimização: remove array de children se estiver vazio
+          // Optimization: remove children array if empty
           if (node.c && node.c.length === 0) delete node.c
 
           stack.splice(idx)

@@ -1,12 +1,19 @@
 /**
- * report.ts — Geração, formatação e consolidação de relatórios SEO
+ * report.ts — SEO report generation and formatting
  *
- * Consolida relatórios de múltiplas páginas, formata output para console
- * e salva relatório em arquivo JSON.
+ * Consolidates reports from multiple pages, formats output for the console,
+ * and saves the JSON/Markdown reports to the file system.
  */
 
-import { writeFileSync, mkdirSync, existsSync } from 'node:fs'
+// ============================================================================
+// Node stdlib
+// ============================================================================
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+
+// ============================================================================
+// Type imports
+// ============================================================================
 import type { SeoIssue, SeoReport, SeoSeverity } from './types'
 
 // ============================================================================

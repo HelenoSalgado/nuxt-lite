@@ -1,5 +1,23 @@
+/**
+ * extract.ts — Extractor for used HTML selectors
+ *
+ * Provides functionalities to parse HTML and retrieve all
+ * classes, IDs, and tags used, helping to filter CSS.
+ */
+
+// ============================================================================
+// External dependencies
+// ============================================================================
 import { parseHTML } from 'linkedom'
+
+// ============================================================================
+// Local imports
+// ============================================================================
 import { ESSENTIAL_SELECTORS } from '../types'
+
+// ============================================================================
+// Extraction Methods
+// ============================================================================
 
 /**
  * Extract all class names, IDs, and HTML element names from HTML using linkedom.

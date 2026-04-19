@@ -1,16 +1,16 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, unicorn/no-new-array */
 /**
- * devalue-parse.ts — Parser compatível com o formato de serialização do Nuxt 4
+ * devalue-parse.ts — Parser compatible with Nuxt 4 serialization format
  *
- * O Nuxt usa `devalue` para serializar payloads. Este módulo recria a lógica
- * de unflatten/parse para desserializar os _payload.json no cliente nuxt-lite.
+ * Nuxt uses `devalue` to serialize payloads. This module recreates the logic
+ * for unflatten/parse to deserialize the _payload.json in the nuxt-lite client.
  *
- * Referência: node_modules/devalue/src/parse.js
+ * Reference: node_modules/devalue/src/parse.js
  *
- * ZERO conhecimento sobre o conteúdo do payload — apenas desserializa o formato.
+ * ZERO knowledge about payload content — just deserializes the format.
  */
 
-// Constantes do devalue
+// devalue constants
 const UNDEFINED = -1
 const NAN = -2
 const POSITIVE_INFINITY = -3
@@ -19,8 +19,8 @@ const NEGATIVE_ZERO = -5
 const HOLE = -6
 const SPARSE = -7
 
-// Revivers padrão do Nuxt (node_modules/nuxt/dist/app/plugins/revive-payload.client.js)
-// Apenas desembrulham os wrappers de reatividade — retornam o dado puro
+// Standard Nuxt revivers (node_modules/nuxt/dist/app/plugins/revive-payload.client.js)
+// Just unwrap reactivity wrappers — return raw data
 const NUXT_REVIVERS: Record<string, (value: any) => any> = {
   NuxtError: data => data,
   EmptyShallowRef: data => data,
@@ -32,9 +32,9 @@ const NUXT_REVIVERS: Record<string, (value: any) => any> = {
 }
 
 /**
- * Parseia um payload serializado pelo devalue (formato do Nuxt)
- * @param serialized JSON string ou array já parseado
- * @returns Objeto desserializado — exatamente como o Nuxt faria no cliente
+ * Parses a devalue-serialized payload (Nuxt format)
+ * @param serialized JSON string or already parsed array
+ * @returns Deserialized object — exactly as Nuxt would do on the client
  */
 export function parsePayload(serialized: string | any[]): Record<string, any> {
   const parsed = typeof serialized === 'string' ? JSON.parse(serialized) : serialized
@@ -42,10 +42,10 @@ export function parsePayload(serialized: string | any[]): Record<string, any> {
 }
 
 /**
- * Revive um valor flattened pelo devalue
- * Adaptado de: node_modules/devalue/src/parse.js → unflatten()
+ * Revives a flattened value by devalue
+ * Adapted from: node_modules/devalue/src/parse.js → unflatten()
  *
- * Não faz nenhuma suposição sobre o conteúdo — apenas revive a estrutura.
+ * Makes no assumptions about the content — just revives the structure.
  */
 function unflatten(parsed: number | any[], revivers?: Record<string, (value: any) => any>): any {
   if (typeof parsed === 'number') return hydrate(parsed, true)

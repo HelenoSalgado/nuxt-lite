@@ -16,7 +16,7 @@ interface DomNode {
   g?: string // tag (ex: div, span)
   a?: Record<string, string> // attrs
   c?: DomNode[] // children
-  v?: string // value (content para texto ou comentário)
+  v?: string // value (content for text or comment)
 }
 
 interface PagePayload {

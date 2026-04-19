@@ -1,4 +1,18 @@
+/**
+ * filter.ts — CSS filtering and mapping
+ *
+ * Provides functions to filter CSS rules based on used selectors,
+ * removing unused styles and applying short-hash data-v mappings.
+ */
+
+// ============================================================================
+// Local imports
+// ============================================================================
 import { PRESERVE_AT_RULE_RE } from '../types'
+
+// ============================================================================
+// CSS Filtering Methods
+// ============================================================================
 
 /**
  * Filter parsed CSS rules to only those matching used selectors.

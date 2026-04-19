@@ -1,5 +1,5 @@
 // ============================================================================
-// SEO Types — Interfaces para análise e relatório de SEO
+// SEO Types — Interfaces for SEO analysis and reporting
 // ============================================================================
 
 export type SeoSeverity = 'error' | 'warning' | 'info' | 'success'

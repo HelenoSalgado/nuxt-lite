@@ -1,13 +1,39 @@
-import { defineNuxtModule, createResolver } from '@nuxt/kit'
-import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync, readdirSync, statSync } from 'node:fs'
+/**
+ * module.ts — Main Nuxt module entry point
+ *
+ * Handles module lifecycle, hooks configuration, and coordinates
+ * CSS optimization, HTML processing, and SEO analysis during build.
+ */
+
+// ============================================================================
+// Node stdlib
+// ============================================================================
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
-import type { ModuleOptions, ExtendedOptions } from './types'
-import { resolveCssMode, findOutputDir, resolveSeoConfig, resolveSvgConfig, resolveColorConfig } from './types'
+
+// ============================================================================
+// External dependencies
+// ============================================================================
+import { createResolver, defineNuxtModule } from '@nuxt/kit'
+
+// ============================================================================
+// Type imports
+// ============================================================================
+import type { ExtendedOptions, ModuleOptions } from './types'
+
+// ============================================================================
+// Local imports - utils
+// ============================================================================
+import { findOutputDir, resolveColorConfig, resolveCssMode, resolveSeoConfig, resolveSvgConfig } from './types'
+
+// ============================================================================
+// Local imports - modules
+// ============================================================================
+import { filterCssBySelectors } from './css/filter'
+import { parseCssRules } from './css/parser'
+import { collectAllCssFiles, pruneNuxtArtifacts, removeRedundantCssFiles } from './fs'
 import { processPageContent } from './html/process'
 import { generateSpriteContainer } from './html/svg'
-import { collectAllCssFiles, removeRedundantCssFiles, pruneNuxtArtifacts } from './fs'
-import { parseCssRules } from './css/parser'
-import { filterCssBySelectors } from './css/filter'
 
 export type { ModuleOptions } from './types'
 

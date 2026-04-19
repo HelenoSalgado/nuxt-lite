@@ -1,4 +1,18 @@
+/**
+ * color.ts — Color mode script generation
+ *
+ * Provides a generator for a non-blocking inline script
+ * that manages color modes and avoids FOUC.
+ */
+
+// ============================================================================
+// Type imports
+// ============================================================================
 import type { ColorModeOptions } from '../types'
+
+// ============================================================================
+// Script Generation
+// ============================================================================
 
 /**
  * Generates an ultra-fast, non-blocking inline script for color mode management.

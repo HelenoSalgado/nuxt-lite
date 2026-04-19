@@ -1,11 +1,32 @@
-import { SVG_RE } from '../types'
+/**
+ * svg.ts — SVG processing and deduplication
+ *
+ * Scans HTML for inline SVGs, deduplicates them by content hash,
+ * and generates a sprite container to optimize DOM size.
+ */
+
+// ============================================================================
+// Node stdlib
+// ============================================================================
 import { createHash } from 'node:crypto'
 
+// ============================================================================
+// Local imports
+// ============================================================================
+import { SVG_RE } from '../types'
+
+// ============================================================================
+// Types
+// ============================================================================
 export interface SvgSymbol {
   id: string
   content: string
   attributes: string
 }
+
+// ============================================================================
+// SVG Processing
+// ============================================================================
 
 /**
  * Deduplicates SVGs in HTML and replaces them with <use> tags only if they repeat.

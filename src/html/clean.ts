@@ -1,4 +1,19 @@
+/**
+ * clean.ts — HTML cleaning and attribute normalization
+ *
+ * Provides functions to strip Vue/Nuxt runtime artifacts,
+ * remove obsolete attributes, and normalize HTML output
+ * for optimized production builds.
+ */
+
+// ============================================================================
+// External dependencies
+// ============================================================================
 import { parseHTML } from 'linkedom'
+
+// ============================================================================
+// CSS Cleanup
+// ============================================================================
 
 /**
  * Remove stylesheet links and existing <style> tags using linkedom.
