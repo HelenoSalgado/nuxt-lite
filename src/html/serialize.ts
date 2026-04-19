@@ -1,10 +1,10 @@
 /**
- * serialize.ts — Parser HTML → JSON hierárquico (árvore DOM completa)
+ * serialize.ts — HTML → Hierarchical JSON (Complete DOM tree)
  *
- * Converte o conteúdo do slot do layout em uma árvore JSON reconstruível:
+ * Converts layout slot content into a reconstructible JSON tree:
  * { tag: 'div', attrs: { class: '...' }, children: [...] }
  *
- * Preserva: tags, atributos (SVG viewBox corrigido), textos, comentários
+ * Preserves: tags, attributes (corrected SVG viewBox), text, comments
  */
 
 // ============================================================================
@@ -13,10 +13,10 @@
 
 export interface DomNode {
   t?: 'e' | 't' | 'c' // type: e=element (default), t=text, c=comment
-  g?: string          // tag (ex: div, span)
+  g?: string // tag (ex: div, span)
   a?: Record<string, string> // attrs
-  c?: DomNode[]       // children
-  v?: string          // value (content para texto ou comentário)
+  c?: DomNode[] // children
+  v?: string // value (content para texto ou comentário)
 }
 
 export interface PagePayload {
@@ -135,7 +135,7 @@ function tokenize(html: string): HtmlToken[] {
 }
 
 // ============================================================================
-// Attribute Parser — com correção de viewBox
+// Attribute Parser — with viewBox correction
 // ============================================================================
 
 function parseAttrs(attrString: string): Record<string, string> {
@@ -146,7 +146,7 @@ function parseAttrs(attrString: string): Record<string, string> {
   while ((match = attrRe.exec(attrString)) !== null) {
     let name = match[1]!
     const lower = name.toLowerCase()
-    // SSR entrega viewBox lowercase — restaurar
+    // SSR delivers viewBox lowercase — restore
     if (lower === 'viewbox') name = 'viewBox'
     else if (lower !== name && !isSvgAttrCamel(lower)) name = lower
 
@@ -159,7 +159,7 @@ function parseAttrs(attrString: string): Record<string, string> {
   return attrs
 }
 
-// SVG attributes que precisam de camelCase
+// SVG attributes that require camelCase
 const SVG_CAMEL = new Set([
   'viewbox', 'preserveaspectratio', 'attributename', 'attributetype',
   'basefrequency', 'baseprofile', 'calcmode', 'clippathunits',
@@ -275,7 +275,7 @@ function tokensToDom(tokens: HtmlToken[]): DomNode[] {
           const node = stack[idx]!
           // Otimização: remove array de children se estiver vazio
           if (node.c && node.c.length === 0) delete node.c
-          
+
           stack.splice(idx)
           if (stack.length > 0) {
             const parent = stack[stack.length - 1]!

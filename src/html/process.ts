@@ -20,7 +20,7 @@ export function processPageContent(
   html: string,
   options: ExtendedOptions,
   runtimeSrc: string,
-  dataVMapping?: Map<string, string>
+  dataVMapping?: Map<string, string>,
 ): PageProcessResult {
   const { document } = parseHTML(html)
   const { _cssMode: cssMode, safelist = [], _svgResolved: svgConfig } = options
@@ -58,7 +58,7 @@ export function processPageContent(
     const colorModeScriptStr = generateColorModeScript(options._colorResolved)
     const colorScriptEl = document.createElement('script')
     colorScriptEl.textContent = colorModeScriptStr
-    // Inserir no topo do head para evitar FOUC
+    // Insert at top of head to prevent FOUC
     document.head.prepend(colorScriptEl)
   }
 
@@ -67,10 +67,10 @@ export function processPageContent(
   imagePreloads.forEach(l => l.remove())
 
   const images = document.querySelectorAll('img')
-  images.forEach(img => {
+  images.forEach((img) => {
     img.removeAttribute('data-nuxt-img')
     img.removeAttribute('onerror')
-    
+
     const src = img.getAttribute('src') || ''
     const srcset = img.getAttribute('srcset') || ''
 
@@ -116,6 +116,6 @@ export function processPageContent(
   return {
     html: finalHtml,
     usedSelectors,
-    symbols: pageSymbols
+    symbols: pageSymbols,
   }
 }
