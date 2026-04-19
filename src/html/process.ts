@@ -42,8 +42,7 @@ export interface PageProcessResult {
 export function processPageContent(
   html: string,
   options: ExtendedOptions,
-  runtimeSrc: string,
-  dataVMapping?: Map<string, string>,
+  runtimeSrc: string
 ): PageProcessResult {
   const { document } = parseHTML(html)
   const { _cssMode: cssMode, safelist = [], _svgResolved: svgConfig } = options
@@ -57,7 +56,7 @@ export function processPageContent(
   }
 
   // 3 & 4. Strip runtime artifacts
-  stripRuntimeArtifacts(document, options._buildAssetsDir, dataVMapping)
+  stripRuntimeArtifacts(document, options._buildAssetsDir)
 
   // 4b. Inject Lightweight Color Mode
   if (options._colorResolved.enabled) {

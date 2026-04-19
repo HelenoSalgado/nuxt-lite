@@ -91,7 +91,7 @@ export default defineNuxtModule<ModuleOptions>({
         let html = route.contents as string
 
         // 1. Process Page (Clean, Inject Runtime script tag, etc.)
-        const { html: processedHtml, usedSelectors, symbols } = processPageContent(html, extendedOptions, '', dataVMapping)
+        const { html: processedHtml, usedSelectors, symbols } = processPageContent(html, extendedOptions, '')
         html = processedHtml
 
         // Store symbols for payload later
