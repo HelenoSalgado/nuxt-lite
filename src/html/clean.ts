@@ -14,14 +14,46 @@ export function stripExistingCss(document: Document): void {
 /**
  * Remove Vue runtime scripts and preload/prefetch links using linkedom.
  */
-export function stripVueRuntime(document: Document): void {
+export function stripVueRuntime(document: Document, buildAssetsDir: string = '/_nuxt/'): void {
+  const assetsDir = buildAssetsDir.startsWith('/') ? buildAssetsDir : `/${buildAssetsDir}`
+  const assetsPattern = assetsDir.endsWith('/') ? assetsDir : `${assetsDir}/`
+
   // Remove Vue runtime scripts
-  const scripts = document.querySelectorAll('script[type="module"][src*="/_nuxt/"]')
+  const scripts = document.querySelectorAll(`script[type="module"][src*="${assetsPattern}"]`)
   scripts.forEach(el => el.remove())
 
   // Remove modulepreload and prefetch links
-  const preloads = document.querySelectorAll('link[rel="modulepreload"], link[rel="preload"][href*="/_nuxt/"], link[rel="prefetch"][href*="/_nuxt/"]')
+  const preloads = document.querySelectorAll(`
+    link[rel="modulepreload"], 
+    link[rel="preload"][href*="${assetsPattern}"], 
+    link[rel="prefetch"][href*="${assetsPattern}"],
+    link[rel="preload"][href*="_payload.json"],
+    link[rel="prefetch"][href*="_payload.json"],
+    link[rel="preload"][as="fetch"]
+  `)
   preloads.forEach(el => el.remove())
+}
+
+/**
+ * Remove data-v attributes and optionally convert to short classes.
+ * Only converts if the hash is present in the provided mapping.
+ */
+export function stripDataVAttributes(document: Document, mapping?: Map<string, string>): void {
+  const elements = document.querySelectorAll('*')
+  elements.forEach((el) => {
+    const attrs = Array.from(el.attributes)
+    attrs.forEach((attr) => {
+      if (attr.name.startsWith('data-v-')) {
+        if (mapping) {
+          const hash = attr.name.replace('data-v-', '')
+          if (mapping.has(hash)) {
+            el.classList.add(mapping.get(hash)!)
+          }
+        }
+        el.removeAttribute(attr.name)
+      }
+    })
+  })
 }
 
 /**

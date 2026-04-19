@@ -4,14 +4,30 @@ import { ESSENTIAL_SELECTORS } from '../types'
 /**
  * Extract all class names, IDs, and HTML element names from HTML using linkedom.
  */
-export function extractUsedSelectors(html: string, safelist: string[] = []): Set<string> {
+export function extractUsedSelectors(
+  html: string, 
+  safelist: string[] = [], 
+  excludeSelector?: string
+): Set<string> {
   const used = new Set<string>(ESSENTIAL_SELECTORS)
   safelist.forEach(s => used.add(s))
 
   const { document } = parseHTML(html)
+
+  // If excluding, we clone or modify to avoid affecting the original logic
+  // but for extraction we can just avoid visiting those branches.
+  const excludeEl = excludeSelector ? document.querySelector(excludeSelector) : null
+
   const allElements = document.querySelectorAll('*')
 
   allElements.forEach((el: any) => {
+    // Check if this element is inside the excluded area
+    if (excludeEl && excludeEl.contains(el)) {
+      // Still add the tag name of the excluded container itself, but skip its children
+      if (el === excludeEl) used.add(el.tagName.toLowerCase())
+      return
+    }
+
     // Tag name
     used.add(el.tagName.toLowerCase())
 

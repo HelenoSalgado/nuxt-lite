@@ -2,55 +2,98 @@ import { PRESERVE_AT_RULE_RE } from '../types'
 
 /**
  * Filter parsed CSS rules to only those matching used selectors.
- * Returns minified CSS (single line, no extra whitespace).
+ * Returns a Map of matched rules.
  */
-export function filterCssBySelectors(
+export function filterCssToMap(
   rules: Map<string, string>,
   used: ReadonlySet<string>,
-): string {
-  const kept: string[] = []
-  const keptMedia = new Map<string, Set<string>>()
-  const seenBlocks = new Set<string>()
+  dataVMapping?: Map<string, string>
+): Map<string, string> {
+  const matched = new Map<string, string>()
+  const effectiveUsed = new Set(used)
 
-  for (const [selector, block] of rules) {
+  if (dataVMapping && dataVMapping.size > 0) {
+    for (const [hash, short] of dataVMapping) {
+      if (used.has(`data-v-${hash}`)) {
+        effectiveUsed.add(short)
+      }
+    }
+  }
+
+  for (let [selector, block] of rules) {
+    // Apply data-v mapping if provided
+    if (dataVMapping && dataVMapping.size > 0) {
+      for (const [hash, short] of dataVMapping) {
+        const attrSelector = `[data-v-${hash}]`
+        if (selector.includes(attrSelector)) {
+          selector = selector.split(attrSelector).join(`.${short}`)
+          block = block.split(attrSelector).join(`.${short}`)
+        }
+      }
+    }
+
     // @media-wrapped selectors
     if (selector.startsWith('@media|')) {
       const parts = selector.split('|')
       const atRule = parts[1] ?? ''
       const innerSel = parts.slice(2).join('|')
-      if (innerSel && selectorMatches(innerSel, used)) {
-        if (!keptMedia.has(atRule)) keptMedia.set(atRule, new Set())
-        // Keep the full rule block (selector + declarations) as-is
-        keptMedia.get(atRule)!.add(block)
+      if (innerSel && selectorMatches(innerSel, effectiveUsed)) {
+        // We use a combined key for media rules to allow subtraction
+        matched.set(selector, block)
       }
       continue
     }
 
     // Preserve @font-face, @keyframes, etc. entirely
     if (selector.startsWith('@') && PRESERVE_AT_RULE_RE.test(selector)) {
-      if (!seenBlocks.has(block)) {
-        seenBlocks.add(block)
-        kept.push(block)
-      }
+      matched.set(selector, block)
       continue
     }
 
-    // Other at-rules (like raw @media) — keep once
+    // Skip raw @media blocks — they are handled via @media| prefixed rules
+    if (selector.startsWith('@media')) {
+      continue
+    }
+
+    // Other at-rules (like raw @supports) — keep once
     if (selector.startsWith('@')) {
-      if (!seenBlocks.has(block)) {
-        seenBlocks.add(block)
-        kept.push(block)
-      }
+      matched.set(selector, block)
       continue
     }
 
     // Regular selector — keep if it matches
-    if (selectorMatches(selector, used)) {
+    if (selectorMatches(selector, effectiveUsed)) {
+      matched.set(selector, block)
+    }
+  }
+
+  return matched
+}
+
+/**
+ * Convert a Map of rules back to a minified CSS string.
+ */
+export function rulesMapToCss(rules: Map<string, string>): string {
+  const kept: string[] = []
+  const keptMedia = new Map<string, Set<string>>()
+  const seenBlocks = new Set<string>()
+
+  for (const [selector, block] of rules) {
+    if (selector.startsWith('@media|')) {
+      const parts = selector.split('|')
+      const atRule = parts[1] ?? ''
+      if (!keptMedia.has(atRule)) keptMedia.set(atRule, new Set())
+      keptMedia.get(atRule)!.add(block)
+      continue
+    }
+
+    if (!seenBlocks.has(block)) {
+      seenBlocks.add(block)
       kept.push(block)
     }
   }
 
-  // Rebuild @media blocks from matching inner selectors
+  // Rebuild @media blocks
   for (const [atRule, innerBlocks] of keptMedia) {
     kept.push(atRule + '{' + Array.from(innerBlocks).join('') + '}')
   }
@@ -59,8 +102,21 @@ export function filterCssBySelectors(
 }
 
 /**
+ * Filter parsed CSS rules to only those matching used selectors.
+ * Returns minified CSS (single line, no extra whitespace).
+ */
+export function filterCssBySelectors(
+  rules: Map<string, string>,
+  used: ReadonlySet<string>,
+  dataVMapping?: Map<string, string>
+): string {
+  const matchedMap = filterCssToMap(rules, used, dataVMapping)
+  return rulesMapToCss(matchedMap)
+}
+
+/**
  * Fast selector matching using Set lookups.
- * Splits compound selectors and checks each part against the used set.
+ * Checks if all components of a compound selector are present in the used set.
  */
 function selectorMatches(selector: string, used: ReadonlySet<string>): boolean {
   const parts = selector.split(',').map(s => s.trim())
@@ -70,28 +126,78 @@ function selectorMatches(selector: string, used: ReadonlySet<string>): boolean {
     if (part === ':root' || part === '.dark') return true
     if (used.has(part)) return true
 
-    // Extract class names: .foo, .foo:hover, .foo.bar
-    const classMatches = part.match(/\.([a-z_-][\w-]*)/gi)
-    if (classMatches) {
-      for (const raw of classMatches) {
-        const cls = raw.slice(1)
-        const base = cls.split(':')[0]
-        if (used.has(cls) || (base && used.has(base))) return true
+    // Split by combinators: space, >, +, ~
+    const simpleSelectors = part.split(/[\s>+~]+/)
+    let allSimpleMatch = true
+
+    for (const simple of simpleSelectors) {
+      if (!simple || simple.startsWith(':')) continue
+      
+      let matchedAny = false
+      let hasComponent = false
+
+      // 1. Check classes
+      const classMatches = simple.match(/\.([a-z_-][\w-]*)/gi)
+      if (classMatches) {
+        hasComponent = true
+        for (const raw of classMatches) {
+          if (!used.has(raw.slice(1))) {
+            allSimpleMatch = false
+            break
+          }
+          matchedAny = true
+        }
+      }
+      if (!allSimpleMatch) break
+
+      // 2. Check IDs
+      const idMatches = simple.match(/#([a-z_-][\w-]*)/gi)
+      if (idMatches) {
+        hasComponent = true
+        for (const raw of idMatches) {
+          if (!used.has(raw.slice(1))) {
+            allSimpleMatch = false
+            break
+          }
+          matchedAny = true
+        }
+      }
+      if (!allSimpleMatch) break
+
+      // 3. Check attribute selectors: [data-v-xxxx], [type="text"]
+      const attrMatches = simple.match(/\[([a-z0-9_-]+)/gi)
+      if (attrMatches) {
+        hasComponent = true
+        for (const raw of attrMatches) {
+          const attrName = raw.slice(1)
+          if (!used.has(attrName)) {
+            allSimpleMatch = false
+            break
+          }
+          matchedAny = true
+        }
+      }
+      if (!allSimpleMatch) break
+
+      // 4. Check element tags: div, span, etc.
+      const elemMatch = simple.match(/^([a-z][a-z0-9]*)/i)
+      if (elemMatch) {
+        hasComponent = true
+        const tag = elemMatch[1].toLowerCase()
+        if (!used.has(tag)) {
+          allSimpleMatch = false
+          break
+        }
+        matchedAny = true
+      }
+
+      if (hasComponent && !matchedAny) {
+        allSimpleMatch = false
+        break
       }
     }
 
-    // Extract IDs: #foo
-    const idMatches = part.match(/#([a-z_-][\w-]*)/gi)
-    if (idMatches) {
-      for (const raw of idMatches) {
-        const id = raw.slice(1)
-        if (id && used.has(id)) return true
-      }
-    }
-
-    // Extract element name: div, span, etc.
-    const elemMatch = part.match(/^([a-z][a-z0-9]*)/i)
-    if (elemMatch && elemMatch[1] && used.has(elemMatch[1])) return true
+    if (allSimpleMatch) return true
   }
 
   return false

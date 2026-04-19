@@ -122,6 +122,13 @@ export interface ModuleOptions {
   cleanHtml?: boolean
 
   /**
+   * Extract and inline critical CSS (layout).
+   * If true, CSS found outside the dynamic content area (main) will be inlined.
+   * @default false
+   */
+  criticalCss?: boolean
+
+  /**
    * List of CSS classes or selectors to preserve from tree-shaking.
    * Useful for classes added dynamically via JS.
    * @default []
@@ -145,6 +152,13 @@ export interface ModuleOptions {
    * Lightweight replacement for @nuxtjs/color-mode.
    */
   colorMode?: ColorModeOptions | boolean
+
+  /**
+   * Remove unused Nuxt/Vue artifacts from the output directory (dist/.output).
+   * Deletes .js and .js.map files that are no longer needed by nuxt-lite.
+   * @default false
+   */
+  pruneOutput?: boolean
 }
 
 // ============================================================================
@@ -160,6 +174,8 @@ export interface ExtendedOptions extends ModuleOptions {
   _seoResolved: SeoOptions & { enabled: boolean }
   _svgResolved: SvgOptions & { enabled: boolean }
   _colorResolved: ColorModeOptions & { enabled: boolean }
+  _buildAssetsDir: string
+  criticalCss: boolean
 }
 
 export interface ProcessResult {

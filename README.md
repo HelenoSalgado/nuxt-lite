@@ -1,17 +1,17 @@
 # nuxt-lite
 
-Módulo Nuxt que substitui o JavaScript do Vue/Nuxt no cliente por um runtime leve (~5KB minificado e gzip) que gerencia navegação SPA e troca de conteúdo via JSON.
+Módulo Nuxt que substitui o JavaScript do Vue/Nuxt no cliente por um runtime leve (~6KB minificado) que gerencia navegação SPA e troca de conteúdo via JSON.
 
 ## Visão Geral
 
-O **nuxt-lite** é feito para `nuxt generate`. Durante o build, o conteúdo de cada página é extraído do HTML SSR e transformado em payloads JSON compactos. No cliente, um runtime mínimo em TypeScript reconstrói o DOM a partir desses payloads e intercepta cliques em links para fazer prefetch e troca de conteúdo — sem carregar o framework Vue (~500KB).
+O **nuxt-lite** é feito para `nuxt generate`. Durante o build, o conteúdo de cada página é extraído do HTML SSR e transformado em payloads JSON compactos. No cliente, um runtime mínimo em TypeScript reconstrói o DOM a partir desses payloads e intercepta cliques em links para fazer a troca de conteúdo — sem carregar o framework Vue (~500KB).
 
 ### O que faz
 
 - **Payload JSON por página:** O conteúdo variável (dentro de `<main>` ou `[data-page-content]`) é serializado em `_payload.json` durante o build.
-- **Runtime leve:** Um script em TypeScript (~5KB min+gzip) substitui o Vue runtime no cliente.
-- **Navegação SPA:** Intercepta links, faz prefetch via `IntersectionObserver` e troca o conteúdo com transições CSS.
-- **CSS por página:** Extrai apenas os seletores CSS usados em cada página usando `linkedom`. Classes adicionadas dinamicamente via JS podem ser preservadas com `safelist`.
+- **Runtime leve:** Um script em TypeScript (~6KB minificado) substitui o Vue runtime no cliente.
+- **Navegação SPA:** Intercepta links, realiza prefetch sob demanda e troca o conteúdo com transições CSS configuráveis.
+- **CSS Otimizado:** Purifica o CSS extraindo apenas os seletores usados. Suporta modos `'inline'` (no HTML), `'file'` (global único) e o planejado `'page'` (por rota).
 - **Acessibilidade:** Move o foco para o `<h1>` ou container principal após navegação.
 - **Limpeza do HTML:** Remove artefatos SSR do Nuxt/Vue (`__NUXT_DATA__`, comentários, scripts desnecessários).
 
@@ -28,23 +28,26 @@ Adicione ao `nuxt.config.ts` (deve ser o **primeiro** módulo da lista):
 ```ts
 export default defineNuxtConfig({
   modules: [
-    '~~/nuxt-lite/src/module',
+    './nuxt-lite/src/module',
   ],
   nuxtLite: {
-    optimizeCss: 'inline',     // 'inline' | 'file' | false
+    optimizeCss: 'inline',     // 'inline' | 'file' | 'page' | false
     safelist: ['is-active'],   // Classes a preservar no tree-shaking
   },
 })
 ```
 
+> **Aviso:** O suporte a CSS `'inline'` e `'page' ` está em fase experimental e pode apresentar instabilidades na navegação SPA se o CSS estrutural (layout) não for devidamente separado. Consulte `CSS_PRECISION.plan.md` para detalhes do plano de melhoria.
+
 ## Configurações
 
 | Opção | Padrão | Descrição |
 |---|---|---|
-| `optimizeCss` | `false` | `'inline'`: CSS por página. `'file'`: arquivo global único. `false`: desativado. |
+| `optimizeCss` | `false` | `'inline'`: CSS por página. `'file'`: arquivo global. `'page'`: arquivo por rota. |
 | `safelist` | `[]` | Classes ou seletores que NÃO devem ser removidos. |
 | `cleanHtml` | `true` | Remove artefatos Nuxt/Vue do HTML final. |
 | `optimizeSeo` | `false` | SEO analysis: `true`/`'analyze'` = reporta issues, `'fix'` = auto-corrige + reporta. |
+| `pruneOutput` | `false` | Remove artefatos Nuxt/Vue não utilizados (`.js`, `.map`) da pasta de saída. |
 
 ## SEO Analysis (`optimizeSeo`)
 
@@ -152,9 +155,10 @@ Defina as classes de transição no CSS global:
 5. O CSS é analisado para extrair apenas os seletores usados naquela página.
 
 ### Client-side
-1. `IntersectionObserver` monitora links na viewport e inicia prefetch dos payloads.
-2. Ao clicar, o runtime busca o JSON e reconstrói o conteúdo.
-3. Aplica transições CSS e move o foco para acessibilidade.
+1. Intercepta eventos de clique em links internos.
+2. Realiza prefetch do `_payload.json` ao passar o mouse (hover) com debounce.
+3. Ao clicar, o runtime reconstrói o conteúdo DOM.
+4. Gerencia transições e foco para acessibilidade.
 
 ## Limitações
 

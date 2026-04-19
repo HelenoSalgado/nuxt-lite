@@ -1,7 +1,7 @@
 import { parseHTML } from 'linkedom'
 import type { ExtendedOptions } from '../types'
 import { extractUsedSelectors } from './extract'
-import { stripExistingCss, stripVueRuntime, stripNuxtScripts } from './clean'
+import { stripExistingCss, stripVueRuntime, stripNuxtScripts, stripDataVAttributes } from './clean'
 import { processSvgs, generateSpriteContainer } from './svg'
 import type { SvgSymbol } from './svg'
 import { generateColorModeScript } from './color'
@@ -20,6 +20,7 @@ export function processPageContent(
   html: string,
   options: ExtendedOptions,
   runtimeSrc: string,
+  dataVMapping?: Map<string, string>
 ): PageProcessResult {
   const { document } = parseHTML(html)
   const { _cssMode: cssMode, safelist = [], _svgResolved: svgConfig } = options
@@ -47,7 +48,7 @@ export function processPageContent(
   }
 
   // 3. Strip Vue runtime & preload links
-  stripVueRuntime(document)
+  stripVueRuntime(document, options._buildAssetsDir)
 
   // 4. Strip Nuxt artifacts + unwrap
   stripNuxtScripts(document)
@@ -61,13 +62,31 @@ export function processPageContent(
     document.head.prepend(colorScriptEl)
   }
 
-  // 4c. Normalize Images (strip Nuxt Image artifacts)
+  // 4c. Normalize Images & Remove Redundant Preloads
+  const imagePreloads = document.querySelectorAll('link[rel="preload"][as="image"]')
+  imagePreloads.forEach(l => l.remove())
+
   const images = document.querySelectorAll('img')
   images.forEach(img => {
     img.removeAttribute('data-nuxt-img')
     img.removeAttribute('onerror')
-    // Se quiser remover os wrappers do IPX em ambiente estático, aqui seria o lugar
-    // mas por enquanto apenas limpamos atributos indesejados
+    
+    const src = img.getAttribute('src') || ''
+    const srcset = img.getAttribute('srcset') || ''
+
+    if (srcset && src) {
+      // If srcset is just the src repeated or if it contains redundant duplicates, simplify to just src.
+      const firstSrcSet = srcset.split(',')[0].split(' ')[0].trim()
+      if (firstSrcSet === src && !srcset.includes(',')) {
+        img.removeAttribute('srcset')
+      }
+      else if (srcset.includes(src)) {
+        const parts = srcset.split(',').map(p => p.trim().split(' ')[0])
+        if (parts.length > 0 && parts.every(p => p === src)) {
+          img.removeAttribute('srcset')
+        }
+      }
+    }
   })
 
   // 5. Inject runtime

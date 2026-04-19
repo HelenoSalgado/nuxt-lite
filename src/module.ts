@@ -5,7 +5,7 @@ import type { ModuleOptions, ExtendedOptions } from './types'
 import { resolveCssMode, findOutputDir, resolveSeoConfig, resolveSvgConfig, resolveColorConfig } from './types'
 import { processPageContent } from './html/process'
 import { generateSpriteContainer } from './html/svg'
-import { collectAllCssFiles, removeRedundantCssFiles } from './fs'
+import { collectAllCssFiles, removeRedundantCssFiles, pruneNuxtArtifacts } from './fs'
 import { parseCssRules } from './css/parser'
 import { filterCssBySelectors } from './css/filter'
 
@@ -36,12 +36,15 @@ export default defineNuxtModule<ModuleOptions>({
       _seoResolved: { ...seoConfig.settings, enabled: seoConfig.enabled },
       _svgResolved: { ...svgConfig.settings, enabled: svgConfig.enabled },
       _colorResolved: { ...colorConfig.settings, enabled: colorConfig.enabled },
+      _buildAssetsDir: nuxt.options.app.buildAssetsDir || '/_nuxt/',
+      criticalCss: options.criticalCss ?? false,
     }
 
     if (nuxt.options.dev) return
 
     const cssRules: Map<string, string> | null = null
     const globalUsedSelectors = new Set<string>()
+    const dataVMapping = new Map<string, string>()
     const routeSymbols = new Map<string, any[]>()
     const pageManifest: Record<string, { meta: any, domSize: number }> = {}
     const seoReports = new Map<string, import('./seo/types').SeoReport>()
@@ -61,11 +64,10 @@ export default defineNuxtModule<ModuleOptions>({
 
         // Normalize route to avoid duplicates (e.g. /about vs /about/)
         const normalizedRoute = route.route === '/' ? '/' : route.route.replace(/\/$/, '')
-        
         let html = route.contents as string
 
         // 1. Process Page (Clean, Inject Runtime script tag, etc.)
-        const { html: processedHtml, usedSelectors, symbols } = processPageContent(html, extendedOptions, '')
+        const { html: processedHtml, usedSelectors, symbols } = processPageContent(html, extendedOptions, '', dataVMapping)
         html = processedHtml
 
         // Store symbols for payload later
@@ -178,115 +180,154 @@ export default defineNuxtModule<ModuleOptions>({
       }
       writeFileSync(runtimePath, runtimeSrc, 'utf-8')
 
-      // 2. CSS Optimization
-      if (cssMode !== 'none') {
-        const allCss = collectAllCssFiles(outputDir)
-        if (allCss.size > 0) {
-          let combined = ''
-          for (const [, content] of allCss) combined += content + ' '
-          const rules = parseCssRules(combined)
+      let totalPayloads = 0
 
-          if (cssMode === 'file') {
-            const optimized = filterCssBySelectors(rules, globalUsedSelectors)
-            const cssDir = join(outputDir, 'css')
-            if (!existsSync(cssDir)) mkdirSync(cssDir, { recursive: true })
-            const outPath = join(cssDir, 'optimized.css')
-            writeFileSync(outPath, optimized, 'utf-8')
-            removeRedundantCssFiles(outputDir, outPath)
-            console.log(`  │  ✓ CSS optimized:    ${(optimized.length / 1024).toFixed(1)}KB`)
+      // 2. CSS Optimization & Page Processing
+      if (cssMode !== 'none' || options.cleanHtml) {
+        const allCss = collectAllCssFiles(outputDir)
+        let combined = ''
+        for (const [, content] of allCss) combined += content + ' '
+        const rules = parseCssRules(combined)
+
+        // Identify alive data-v hashes and build mapping
+        dataVMapping.clear()
+        const aliveHashes = new Set<string>()
+        for (const selector of rules.keys()) {
+          const match = selector.match(/\[data-v-([a-z0-9]+)\]/i)
+          if (match) aliveHashes.add(match[1])
+        }
+        let hashIdx = 1
+        aliveHashes.forEach(h => dataVMapping.set(h, `s${hashIdx++}`))
+
+        // Process all HTML files
+        const htmlFiles: string[] = []
+        function collectHtml(d: string) {
+          if (!existsSync(d)) return
+          for (const entry of readdirSync(d)) {
+            if (entry.startsWith('.') || (entry.startsWith('_') && entry !== '_nuxt')) continue
+            const full = join(d, entry)
+            const st = statSync(full)
+            if (st.isDirectory()) { collectHtml(full); continue }
+            if (entry === 'index.html' || entry.endsWith('.html')) htmlFiles.push(full)
           }
-          else if (cssMode === 'inline') {
-            // In inline mode, we have to re-read HTML because we didn't have the CSS rules
-            // during prerender:generate (chicken-and-egg problem)
-            // This is the ONLY time we read HTML back.
-            const htmlFiles: string[] = []
-            function collectHtml(d: string) {
-              for (const entry of readdirSync(d)) {
-                const full = join(d, entry)
-                if (statSync(full).isDirectory()) collectHtml(full)
-                else if (entry === 'index.html') htmlFiles.push(full)
+        }
+        collectHtml(outputDir)
+
+        const { parseHTML } = await import('linkedom')
+        const { stripDataVAttributes, stripNuxtScripts } = await import('./html/clean')
+        const { extractUsedSelectors } = await import('./html/extract')
+        const { extractSlotContent, extractMetaTags } = await import('./html/serialize')
+        const { filterCssToMap, rulesMapToCss } = await import('./css/filter')
+
+        for (const htmlPath of htmlFiles) {
+          let html = readFileSync(htmlPath, 'utf-8')
+          const { document } = parseHTML(html)
+
+          // A) Extract Payload BEFORE stripping markers
+          const relPath = relative(outputDir, htmlPath)
+          let routePath = relPath.replace(/(^|\/)index\.html$/, '').replace(/\\/g, '/')
+          if (routePath.endsWith('.html')) routePath = routePath.replace(/\.html$/, '')
+          const route = routePath === '' ? '/' : '/' + routePath.replace(/\/$/, '') + '/'
+          
+          const startIdx = html.indexOf('<!--NL:SLOT_START-->')
+          const endIdx = html.indexOf('<!--NL:SLOT_END-->')
+          
+          if (startIdx !== -1 && endIdx !== -1) {
+            const slotHtml = html.substring(startIdx + '<!--NL:SLOT_START-->'.length, endIdx)
+            const normalizedRoute = route === '/' ? '/' : route.replace(/\/$/, '')
+            const symbols = routeSymbols.get(normalizedRoute) || []
+            
+            const payload = { 
+              dom: extractSlotContent(slotHtml), 
+              meta: extractMetaTags(html),
+              symbols
+            }
+
+            let payloadPath: string
+            if (route === '/') payloadPath = join(outputDir, '_payload.json')
+            else {
+              const dir = join(outputDir, routePath)
+              if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
+              payloadPath = join(dir, '_payload.json')
+            }
+            writeFileSync(payloadPath, JSON.stringify(payload), 'utf-8')
+            totalPayloads++
+
+            // B) Strip data-v (Short-hashing only for alive hashes)
+            if (options.cleanHtml) {
+              stripDataVAttributes(document, dataVMapping)
+            }
+
+            // C) CSS Extraction with Duplication Prevention
+            let criticalRules = new Map<string, string>()
+            
+            if (options.criticalCss && rules.size > 0) {
+              const layoutSelectors = extractUsedSelectors(document.toString(), options.safelist, '[data-page-content], main')
+              criticalRules = filterCssToMap(rules, layoutSelectors, dataVMapping)
+              const criticalCss = rulesMapToCss(criticalRules)
+              
+              if (criticalCss) {
+                const styleEl = document.createElement('style')
+                styleEl.setAttribute('data-nl-critical', '')
+                styleEl.textContent = criticalCss
+                document.head.appendChild(styleEl)
               }
             }
-            collectHtml(outputDir)
 
-            for (const path of htmlFiles) {
-              let html = readFileSync(path, 'utf-8')
-              const used = new Set(globalUsedSelectors) // Fallback or re-extract
-              // For accuracy, we re-extract used selectors from the processed HTML
-              const { extractUsedSelectors } = await import('./html/extract')
-              const currentUsed = extractUsedSelectors(html, options.safelist)
-              const optimized = filterCssBySelectors(rules, currentUsed)
-              html = html.replace('</head>', `<style>${optimized}</style></head>`)
-              writeFileSync(path, html, 'utf-8')
+            if (cssMode === 'inline') {
+              const currentUsed = extractUsedSelectors(document.toString(), options.safelist)
+              const allPageRules = filterCssToMap(rules, currentUsed, dataVMapping)
+              
+              // SUBTRACT critical rules from the full set to avoid duplication
+              if (criticalRules.size > 0) {
+                for (const key of criticalRules.keys()) {
+                  allPageRules.delete(key)
+                }
+              }
+
+              const optimized = rulesMapToCss(allPageRules)
+              if (optimized) {
+                const styleEl = document.createElement('style')
+                styleEl.textContent = optimized
+                document.head.appendChild(styleEl)
+              }
             }
-            console.log(`  │  ✓ CSS inlined:      ${htmlFiles.length} pages`)
+
+            // E) Final HTML cleanup
+            let finalHtml = document.toString()
+              .replace(/<!--NL:SLOT_START-->/g, '')
+              .replace(/<!--NL:SLOT_END-->/g, '')
+
+            // Inject SVG sprite
+            if (symbols.length > 0) {
+              const { generateSpriteContainer } = await import('./html/svg')
+              const symbolMap = new Map(symbols.map((s: any) => [s.id, s]))
+              const spriteContainer = generateSpriteContainer(symbolMap)
+              finalHtml = finalHtml.replace('</body>', `${spriteContainer}</body>`)
+            }
+
+            writeFileSync(htmlPath, finalHtml, 'utf-8')
           }
+        }
+
+        if (cssMode === 'file') {
+          const optimized = filterCssBySelectors(rules, globalUsedSelectors, dataVMapping)
+          const cssDir = join(outputDir, 'css')
+          if (!existsSync(cssDir)) mkdirSync(cssDir, { recursive: true })
+          const outPath = join(cssDir, 'optimized.css')
+          writeFileSync(outPath, optimized, 'utf-8')
+          removeRedundantCssFiles(outputDir, outPath)
+          console.log(`  │  ✓ CSS optimized:    ${(optimized.length / 1024).toFixed(1)}KB`)
+        } else if (cssMode === 'inline') {
+          console.log(`  │  ✓ CSS inlined:      ${htmlFiles.length} pages`)
         }
       }
 
-      // 3. Save Payloads & Manifest
-      let totalPayloads = 0
-      const htmlFiles: string[] = []
-      function collectHtml(d: string) {
-        if (!existsSync(d)) return
-        for (const entry of readdirSync(d)) {
-          if (entry.startsWith('.') || entry.startsWith('_')) continue
-          const full = join(d, entry)
-          const st = statSync(full)
-          if (st.isDirectory()) { collectHtml(full); continue }
-          if (entry === 'index.html') htmlFiles.push(full)
-        }
-      }
-      collectHtml(outputDir)
-
-      const { extractSlotContent, extractMetaTags } = await import('./html/serialize')
-
-      for (const htmlPath of htmlFiles) {
-        let html = readFileSync(htmlPath, 'utf-8')
-        const relPath = relative(outputDir, htmlPath)
-
-        let routePath = relPath.replace(/(^|\/)index\.html$/, '').replace(/\\/g, '/')
-        if (routePath.endsWith('.html')) routePath = routePath.replace(/\.html$/, '')
-        const route = routePath === '' ? '/' : '/' + routePath.replace(/\/$/, '') + '/'
-
-        const startIdx = html.indexOf('<!--NL:SLOT_START-->')
-        const endIdx = html.indexOf('<!--NL:SLOT_END-->')
-        if (startIdx !== -1 && endIdx !== -1) {
-          const slotHtml = html.substring(startIdx + '<!--NL:SLOT_START-->'.length, endIdx)
-          
-          // Get symbols for this route
-          const normalizedRoute = route === '/' ? '/' : route.replace(/\/$/, '')
-          const symbols = routeSymbols.get(normalizedRoute) || []
-
-          const payload = { 
-            dom: extractSlotContent(slotHtml), 
-            meta: extractMetaTags(html),
-            symbols
-          }
-
-          let payloadPath: string
-          if (route === '/') {
-            payloadPath = join(outputDir, '_payload.json')
-          }
-          else {
-            const dir = join(outputDir, routePath)
-            if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
-            payloadPath = join(dir, '_payload.json')
-          }
-          writeFileSync(payloadPath, JSON.stringify(payload), 'utf-8')
-          totalPayloads++
-
-          // Remove markers from the final HTML
-          html = html.replace('<!--NL:SLOT_START-->', '').replace('<!--NL:SLOT_END-->', '')
-
-          // Inject the sprite container into the final HTML (only symbols for this route)
-          if (symbols.length > 0) {
-            const symbolMap = new Map(symbols.map((s: any) => [s.id, s]))
-            const spriteContainer = generateSpriteContainer(symbolMap)
-            html = html.replace('</body>', `${spriteContainer}</body>`)
-          }
-
-          writeFileSync(htmlPath, html, 'utf-8')
+      // 4. Finalize build artifacts
+      if (options.pruneOutput) {
+        const removed = pruneNuxtArtifacts(outputDir)
+        if (removed.length > 0) {
+          console.log(`  │  ✓ Pruned:           ${removed.length} unused artifacts`)
         }
       }
 

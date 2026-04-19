@@ -18,5 +18,6 @@ export default defineNuxtConfig({
     optimizeCss: 'inline',
     cleanHtml: true,
     optimizeSeo: 'analyze',
+    criticalCss: true,
   },
 })
