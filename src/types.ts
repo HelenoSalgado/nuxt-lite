@@ -69,25 +69,25 @@ export interface ColorModeOptions {
    * @default false
    */
   enabled?: boolean
-  
+
   /**
    * Default preference (light, dark, or system).
    * @default 'light'
    */
   preference?: 'light' | 'dark' | 'system'
-  
+
   /**
    * Fallback if preference is not available.
    * @default 'light'
    */
   fallback?: 'light' | 'dark'
-  
+
   /**
    * Storage key (localStorage or cookie name).
    * @default 'nuxt-color-mode'
    */
   storageKey?: string
-  
+
   /**
    * Class suffix to append (e.g. '-mode' -> 'dark-mode').
    * @default ''
@@ -176,16 +176,6 @@ export interface ExtendedOptions extends ModuleOptions {
   _colorResolved: ColorModeOptions & { enabled: boolean }
   _buildAssetsDir: string
   criticalCss: boolean
-}
-
-export interface ProcessResult {
-  cleaned: number
-  cssOptimized: number
-}
-
-export interface FileResult {
-  cleaned: boolean
-  cssOptimized: boolean
 }
 
 // ============================================================================
@@ -286,12 +276,12 @@ export function resolveSvgConfig(options: ModuleOptions): { enabled: boolean, se
   const svg = options.optimizeSvg
   if (!svg) return { enabled: false, settings: {} }
   const settings: SvgOptions = typeof svg === 'object' ? svg : { enabled: true }
-  return { 
-    enabled: settings.enabled ?? !!svg, 
+  return {
+    enabled: settings.enabled ?? !!svg,
     settings: {
       minOccurrences: settings.minOccurrences ?? 2,
-      ...settings
-    } 
+      ...settings,
+    },
   }
 }
 
@@ -299,15 +289,15 @@ export function resolveColorConfig(options: ModuleOptions): { enabled: boolean, 
   const color = options.colorMode
   if (!color) return { enabled: false, settings: {} }
   const settings: ColorModeOptions = typeof color === 'object' ? color : { enabled: true }
-  return { 
-    enabled: settings.enabled ?? !!color, 
+  return {
+    enabled: settings.enabled ?? !!color,
     settings: {
       preference: settings.preference ?? 'light',
       fallback: settings.fallback ?? 'light',
       storageKey: settings.storageKey ?? 'nuxt-color-mode',
       classSuffix: settings.classSuffix ?? '',
-      ...settings
-    } 
+      ...settings,
+    },
   }
 }
 

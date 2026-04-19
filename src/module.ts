@@ -42,7 +42,6 @@ export default defineNuxtModule<ModuleOptions>({
 
     if (nuxt.options.dev) return
 
-    const cssRules: Map<string, string> | null = null
     const globalUsedSelectors = new Set<string>()
     const dataVMapping = new Map<string, string>()
     const routeSymbols = new Map<string, any[]>()
@@ -54,7 +53,6 @@ export default defineNuxtModule<ModuleOptions>({
       nitroConfig.hooks = nitroConfig.hooks || {}
 
       nitroConfig.hooks['prerender:generate'] = async (route: any) => {
-        // ... (check if HTML) ...
         if (!route || typeof route.contents !== 'string') return
         if (!route.route || route.skip) return
         if (route.route.startsWith('/_nuxt') || route.route.startsWith('/__') || route.route.startsWith('/_ipx/')) return
@@ -220,7 +218,7 @@ export default defineNuxtModule<ModuleOptions>({
         const { filterCssToMap, rulesMapToCss } = await import('./css/filter')
 
         for (const htmlPath of htmlFiles) {
-          let html = readFileSync(htmlPath, 'utf-8')
+          const html = readFileSync(htmlPath, 'utf-8')
           const { document } = parseHTML(html)
 
           // A) Extract Payload BEFORE stripping markers
@@ -228,19 +226,19 @@ export default defineNuxtModule<ModuleOptions>({
           let routePath = relPath.replace(/(^|\/)index\.html$/, '').replace(/\\/g, '/')
           if (routePath.endsWith('.html')) routePath = routePath.replace(/\.html$/, '')
           const route = routePath === '' ? '/' : '/' + routePath.replace(/\/$/, '') + '/'
-          
+
           const startIdx = html.indexOf('<!--NL:SLOT_START-->')
           const endIdx = html.indexOf('<!--NL:SLOT_END-->')
-          
+
           if (startIdx !== -1 && endIdx !== -1) {
             const slotHtml = html.substring(startIdx + '<!--NL:SLOT_START-->'.length, endIdx)
             const normalizedRoute = route === '/' ? '/' : route.replace(/\/$/, '')
             const symbols = routeSymbols.get(normalizedRoute) || []
-            
-            const payload = { 
-              dom: extractSlotContent(slotHtml), 
+
+            const payload = {
+              dom: extractSlotContent(slotHtml),
               meta: extractMetaTags(html),
-              symbols
+              symbols,
             }
 
             let payloadPath: string
@@ -260,12 +258,12 @@ export default defineNuxtModule<ModuleOptions>({
 
             // C) CSS Extraction with Duplication Prevention
             let criticalRules = new Map<string, string>()
-            
+
             if (options.criticalCss && rules.size > 0) {
               const layoutSelectors = extractUsedSelectors(document.toString(), options.safelist, '[data-page-content], main')
               criticalRules = filterCssToMap(rules, layoutSelectors, dataVMapping)
               const criticalCss = rulesMapToCss(criticalRules)
-              
+
               if (criticalCss) {
                 const styleEl = document.createElement('style')
                 styleEl.setAttribute('data-nl-critical', '')
@@ -277,7 +275,7 @@ export default defineNuxtModule<ModuleOptions>({
             if (cssMode === 'inline') {
               const currentUsed = extractUsedSelectors(document.toString(), options.safelist)
               const allPageRules = filterCssToMap(rules, currentUsed, dataVMapping)
-              
+
               // SUBTRACT critical rules from the full set to avoid duplication
               if (criticalRules.size > 0) {
                 for (const key of criticalRules.keys()) {
@@ -318,7 +316,8 @@ export default defineNuxtModule<ModuleOptions>({
           writeFileSync(outPath, optimized, 'utf-8')
           removeRedundantCssFiles(outputDir, outPath)
           console.log(`  │  ✓ CSS optimized:    ${(optimized.length / 1024).toFixed(1)}KB`)
-        } else if (cssMode === 'inline') {
+        }
+        else if (cssMode === 'inline') {
           console.log(`  │  ✓ CSS inlined:      ${htmlFiles.length} pages`)
         }
       }

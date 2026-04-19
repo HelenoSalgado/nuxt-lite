@@ -88,8 +88,4 @@ export function stripNuxtScripts(document: Document): void {
       nuxtDiv.remove()
     }
   }
-
-  // Remove Vue SSR comment markers
-  // linkedom might not fully support comment selection via querySelector,
-  // we might need a tree walker or regex for final cleanup of comments if needed.
 }
