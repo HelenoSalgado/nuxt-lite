@@ -5,9 +5,9 @@ import { ESSENTIAL_SELECTORS } from '../types'
  * Extract all class names, IDs, and HTML element names from HTML using linkedom.
  */
 export function extractUsedSelectors(
-  html: string, 
-  safelist: string[] = [], 
-  excludeSelector?: string
+  html: string,
+  safelist: string[] = [],
+  excludeSelector?: string,
 ): Set<string> {
   const used = new Set<string>(ESSENTIAL_SELECTORS)
   safelist.forEach(s => used.add(s))

@@ -60,7 +60,7 @@ export function removeRedundantCssFiles(rootDir: string, keepPath: string): stri
 /** Remove unused Nuxt/Vue artifacts (.js, .map, manifest.json, content dumps, compressed files) */
 export function pruneNuxtArtifacts(outputDir: string): string[] {
   const removed: string[] = []
-  
+
   // 1. Cleanup specific directories
   const dirsToPrune = ['_nuxt/builds', '__nuxt_content']
   for (const d of dirsToPrune) {
@@ -69,7 +69,8 @@ export function pruneNuxtArtifacts(outputDir: string): string[] {
       try {
         rmSync(full, { recursive: true, force: true })
         removed.push(d)
-      } catch { /* skip */ }
+      }
+      catch { /* skip */ }
     }
   }
 
@@ -77,7 +78,7 @@ export function pruneNuxtArtifacts(outputDir: string): string[] {
   function walk(dir: string) {
     if (!existsSync(dir)) return
     const entries = readdirSync(dir)
-    
+
     for (const entry of entries) {
       const full = join(dir, entry)
       const st = statSync(full)
@@ -86,21 +87,22 @@ export function pruneNuxtArtifacts(outputDir: string): string[] {
       if (st.isDirectory()) {
         // Skip directories to preserve assets, sitemap styles and manual scripts
         if (entry === '_ipx' || entry === 'img' || entry === 'fonts' || entry === 'js' || entry === '__sitemap__') continue
-        
+
         walk(full)
-        
+
         // Remove empty directories after walking
         try {
           if (readdirSync(full).length === 0) {
             rmSync(full, { recursive: true, force: true })
             removed.push(rel)
           }
-        } catch { /* skip */ }
+        }
+        catch { /* skip */ }
         continue
       }
 
       // -- PRUNING RULES --
-      
+
       // A) Nuxt content dumps & specific root artifacts
       if (entry.startsWith('dump.') && entry.endsWith('.sql')) {
         unlinkSync(full); removed.push(rel); continue
@@ -118,7 +120,7 @@ export function pruneNuxtArtifacts(outputDir: string): string[] {
       if (entry.endsWith('.js') || entry.endsWith('.js.map')) {
         // Keep our own runtime!
         if (entry === 'lite.js' || entry === 'lite.min.js') continue
-        
+
         unlinkSync(full); removed.push(rel); continue
       }
 

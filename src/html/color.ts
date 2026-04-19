@@ -7,7 +7,7 @@ import type { ColorModeOptions } from '../types'
  */
 export function generateColorModeScript(options: ColorModeOptions): string {
   const { preference, fallback, storageKey, classSuffix } = options
-  
+
   // Script minimalista e robusto
   // Usamos aspas simples e evitamos dependências externas
   return `(function(k,p,s){
@@ -17,5 +17,5 @@ export function generateColorModeScript(options: ColorModeOptions): string {
     if(v==='system')v=window.matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';
     h.classList.add(v+s);
     h.setAttribute('data-color-mode',v);
-  })('${storageKey}','${preference}','${classSuffix||""}')`.replace(/\n\s*/g, '')
+  })('${storageKey}','${preference}','${classSuffix || ''}')`.replace(/\n\s*/g, '')
 }

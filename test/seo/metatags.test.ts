@@ -178,7 +178,7 @@ describe('processSeoMeta', () => {
   it('analyze mode does not modify meta or html', () => {
     const result = processSeoMeta(MINIMAL_HTML, '/', 'analyze')
     // Should NOT replicate and NOT auto-inject in analyze mode
-    expect(result.meta.og.title).toBeUndefined() 
+    expect(result.meta.og.title).toBeUndefined()
     expect(result.meta.charset).toBeUndefined()
     expect(result.html).toBe(MINIMAL_HTML)
   })

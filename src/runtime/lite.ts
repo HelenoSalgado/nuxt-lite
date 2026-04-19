@@ -13,10 +13,10 @@ interface NuxtLiteState {
 
 interface DomNode {
   t?: 'e' | 't' | 'c' // type: e=element (default), t=text, c=comment
-  g?: string          // tag (ex: div, span)
+  g?: string // tag (ex: div, span)
   a?: Record<string, string> // attrs
-  c?: DomNode[]       // children
-  v?: string          // value (content para texto ou comentário)
+  c?: DomNode[] // children
+  v?: string // value (content para texto ou comentário)
 }
 
 interface PagePayload {
@@ -169,7 +169,7 @@ interface PagePayload {
   // ===== SVG Symbols Update =====
   function updateSymbols(symbols: PagePayload['symbols']) {
     if (!symbols || symbols.length === 0) return
-    
+
     let sprite: Element | null = document.getElementById('__NUXT_LITE_SPRITE__')
     if (!sprite) {
       const s = document.createElementNS(SVG_NS, 'svg')
@@ -184,7 +184,7 @@ interface PagePayload {
       if (!s || !sprite || document.getElementById(s.id)) continue
 
       const viewBoxMatch = s.attributes.match(/viewBox="([^"]*)"/)
-      
+
       const symbol = document.createElementNS(SVG_NS, 'symbol')
       symbol.id = s.id
       if (viewBoxMatch && viewBoxMatch[1]) symbol.setAttribute('viewBox', viewBoxMatch[1])

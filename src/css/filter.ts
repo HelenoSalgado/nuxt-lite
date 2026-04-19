@@ -7,7 +7,7 @@ import { PRESERVE_AT_RULE_RE } from '../types'
 export function filterCssToMap(
   rules: Map<string, string>,
   used: ReadonlySet<string>,
-  dataVMapping?: Map<string, string>
+  dataVMapping?: Map<string, string>,
 ): Map<string, string> {
   const matched = new Map<string, string>()
   const effectiveUsed = new Set(used)
@@ -108,7 +108,7 @@ export function rulesMapToCss(rules: Map<string, string>): string {
 export function filterCssBySelectors(
   rules: Map<string, string>,
   used: ReadonlySet<string>,
-  dataVMapping?: Map<string, string>
+  dataVMapping?: Map<string, string>,
 ): string {
   const matchedMap = filterCssToMap(rules, used, dataVMapping)
   return rulesMapToCss(matchedMap)
@@ -132,7 +132,7 @@ function selectorMatches(selector: string, used: ReadonlySet<string>): boolean {
 
     for (const simple of simpleSelectors) {
       if (!simple || simple.startsWith(':')) continue
-      
+
       let matchedAny = false
       let hasComponent = false
 
@@ -165,7 +165,7 @@ function selectorMatches(selector: string, used: ReadonlySet<string>): boolean {
       if (!allSimpleMatch) break
 
       // 3. Check attribute selectors: [data-v-xxxx], [type="text"]
-      const attrMatches = simple.match(/\[([a-z0-9_-]+)/gi)
+      const attrMatches = simple.match(/\[([\w-]+)/g)
       if (attrMatches) {
         hasComponent = true
         for (const raw of attrMatches) {

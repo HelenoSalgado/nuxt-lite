@@ -20,7 +20,7 @@ export function processSvgs(html: string, minOccurrences: number = 2): { html: s
   const matches = [...html.matchAll(SVG_RE)]
   for (const match of matches) {
     const [fullMatch, attributes = '', content = ''] = match
-    
+
     // Skip sprite container
     if (attributes.includes('id="__NUXT_LITE_SPRITE__"') || attributes.includes('data-nl-ignore')) {
       continue
@@ -28,9 +28,9 @@ export function processSvgs(html: string, minOccurrences: number = 2): { html: s
 
     const cleanContent = content.trim().replace(/>\s+</g, '><')
     const hash = createHash('md5').update(cleanContent).digest('hex').slice(0, 8)
-    
+
     occurrences.set(hash, (occurrences.get(hash) || 0) + 1)
-    
+
     if (!svgData.has(hash)) svgData.set(hash, [])
     svgData.get(hash)!.push({ attributes, content: cleanContent, fullMatch })
   }
@@ -49,7 +49,7 @@ export function processSvgs(html: string, minOccurrences: number = 2): { html: s
       symbols.set(symbolId, {
         id: symbolId,
         content: first.content,
-        attributes: first.attributes
+        attributes: first.attributes,
       })
 
       // Replace all occurrences of this SVG with <use>
@@ -58,7 +58,8 @@ export function processSvgs(html: string, minOccurrences: number = 2): { html: s
         // This is a bit tricky with string.replace, so we'll do it carefully
         processedHtml = processedHtml.replace(item.fullMatch, `<svg ${item.attributes}><use href="#${symbolId}"/></svg>`)
       }
-    } else {
+    }
+    else {
       // It's a unique SVG, just clean it up inline
       for (const item of dataList) {
         processedHtml = processedHtml.replace(item.fullMatch, `<svg ${item.attributes}>${item.content}</svg>`)
@@ -74,7 +75,7 @@ export function processSvgs(html: string, minOccurrences: number = 2): { html: s
  */
 export function generateSpriteContainer(symbols: Map<string, SvgSymbol>): string {
   if (symbols.size === 0) return ''
-  
+
   let symbolsHtml = ''
   for (const symbol of symbols.values()) {
     const viewBoxMatch = symbol.attributes.match(/viewBox="([^"]*)"/)

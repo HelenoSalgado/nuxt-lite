@@ -626,7 +626,7 @@ export function processSeoMeta(
 ): SeoMetaResult {
   // 1. Extract meta tags first (needed for result)
   const meta = extractMetaTags(html)
-  
+
   // If mode is none, return empty report
   if (mode === 'none') {
     return {
@@ -635,9 +635,9 @@ export function processSeoMeta(
         route: route || '/',
         issues: [],
         score: 100,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       },
-      meta
+      meta,
     }
   }
 
