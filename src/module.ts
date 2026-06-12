@@ -69,7 +69,7 @@ export default defineNuxtModule<ModuleOptions>({
     const seoReports = new Map<string, import('./seo/types').SeoReport>()
 
     // Hook: nitro:config — intercept HTML, inject SLOT markers and process page
-    nuxt.hook('nitro:config', (nitroConfig: any) => {
+    nuxt.hook('nitro:config' as any, (nitroConfig: any) => {
       nitroConfig.hooks = nitroConfig.hooks || {}
 
       nitroConfig.hooks['prerender:generate'] = async (route: any) => {

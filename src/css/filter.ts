@@ -137,7 +137,7 @@ function selectorMatches(selector: string, used: ReadonlySet<string>): boolean {
 
   for (const part of parts) {
     if (part === '*' || part.includes('*')) return true
-    if (part === ':root' || part === '.dark') return true
+    if (part === ':root' || part === '.dark' || part === '.sepia') return true
     if (used.has(part)) return true
 
     // Split by combinators: space, >, +, ~

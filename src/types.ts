@@ -85,16 +85,16 @@ export interface ColorModeOptions {
   enabled?: boolean
 
   /**
-   * Default preference (light, dark, or system).
+   * Default preference (light, dark, sepia or system).
    * @default 'light'
    */
-  preference?: 'light' | 'dark' | 'system'
+  preference?: 'light' | 'dark' | 'sepia' | 'system'
 
   /**
    * Fallback if preference is not available.
    * @default 'light'
    */
-  fallback?: 'light' | 'dark'
+  fallback?: 'light' | 'dark' | 'sepia'
 
   /**
    * Storage key (localStorage or cookie name).
@@ -182,7 +182,7 @@ export interface ExtendedOptions extends ModuleOptions {
 // ============================================================================
 
 export const ESSENTIAL_SELECTORS = Object.freeze([
-  'html', 'body', 'head', ':root', 'dark',
+  'html', 'body', 'head', ':root', 'dark', 'sepia',
   'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
   'p', 'a', 'span', 'div', 'img', 'svg',
   'ul', 'ol', 'li', 'table', 'tr', 'td', 'th',
@@ -295,7 +295,7 @@ export function resolveColorConfig(options: ModuleOptions): { enabled: boolean, 
 export function findOutputDir(nuxt: Nuxt): string | null {
   const candidates = [
     nuxt.options.rootDir && join(nuxt.options.rootDir, 'dist'),
-    nuxt.options.nitro.output?.dir,
+    (nuxt.options as any).nitro?.output?.dir,
     '.output/public',
   ]
   for (const d of candidates) {
