@@ -38,7 +38,7 @@ export function extractUsedSelectors(
 
   const allElements = document.querySelectorAll('*')
 
-  allElements.forEach((el: any) => {
+  allElements.forEach((el: Element) => {
     // Check if this element is inside the excluded area
     if (excludeEl && excludeEl.contains(el)) {
       // Still add the tag name of the excluded container itself, but skip its children

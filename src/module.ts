@@ -5,16 +5,14 @@
  * CSS optimization, HTML processing, and SEO analysis during build.
  */
 
+import { createResolver, defineNuxtModule } from '@nuxt/kit'
+import type { NitroConfig, PrerenderRoute } from 'nitropack'
+
 // ============================================================================
 // Node stdlib
 // ============================================================================
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
-
-// ============================================================================
-// External dependencies
-// ============================================================================
-import { createResolver, defineNuxtModule } from '@nuxt/kit'
 
 // ============================================================================
 // Type imports
@@ -64,20 +62,19 @@ export default defineNuxtModule<ModuleOptions>({
 
     const globalUsedSelectors = new Set<string>()
     const dataVMapping = new Map<string, string>()
-    const routeSymbols = new Map<string, any[]>()
-    const pageManifest: Record<string, { meta: any, domSize: number }> = {}
+    const routeSymbols = new Map<string, string[]>()
+    const pageManifest: Record<string, { meta: Record<string, string>, domSize: number }> = {}
     const seoReports = new Map<string, import('./seo/types').SeoReport>()
 
-    // Hook: nitro:config — intercept HTML, inject SLOT markers and process page
-    nuxt.hook('nitro:config' as any, (nitroConfig: any) => {
+    nuxt.hook('nitro:config', (nitroConfig: NitroConfig) => {
       nitroConfig.hooks = nitroConfig.hooks || {}
 
-      nitroConfig.hooks['prerender:generate'] = async (route: any) => {
+      nitroConfig.hooks['prerender:generate'] = async (route: PrerenderRoute) => {
         if (!route || typeof route.contents !== 'string') return
         if (!route.route || route.skip) return
         if (route.route.startsWith('/_nuxt') || route.route.startsWith('/__') || route.route.startsWith('/_ipx/')) return
         if (route.route === '/200.html' || route.route === '/404.html' || route.error) return
-        if (/\.(json|xml|txt|webp|png|jpg|svg|css|js)$/i.test(route.route)) return
+        if (/\.(?:json|xml|txt|webp|png|jpg|svg|css|js)$/i.test(route.route)) return
         if (!route.contents.includes('<!DOCTYPE html>') && !route.contents.includes('<html')) return
 
         // Normalize route to avoid duplicates (e.g. /about vs /about/)
@@ -260,10 +257,10 @@ export default defineNuxtModule<ModuleOptions>({
             }
 
             // C) Extract slotHtml from the ALREADY PROCESSED document
-            let processedHtml = document.toString()
+            const processedHtml = document.toString()
             const processedStartIdx = processedHtml.indexOf('<!--NL:SLOT_START-->')
             const processedEndIdx = processedHtml.indexOf('<!--NL:SLOT_END-->')
-            let slotHtml = (processedStartIdx !== -1 && processedEndIdx !== -1)
+            const slotHtml = (processedStartIdx !== -1 && processedEndIdx !== -1)
               ? processedHtml.substring(processedStartIdx + '<!--NL:SLOT_START-->'.length, processedEndIdx)
               : html.substring(startIdx + '<!--NL:SLOT_START-->'.length, endIdx)
 
@@ -327,7 +324,7 @@ export default defineNuxtModule<ModuleOptions>({
             // Inject SVG sprite
             if (symbols.length > 0) {
               const { generateSpriteContainer } = await import('./html/svg')
-              const symbolMap = new Map(symbols.map((s: any) => [s.id, s]))
+              const symbolMap = new Map(symbols.map((s: { id: string }) => [s.id, s]))
               const spriteContainer = generateSpriteContainer(symbolMap)
               finalHtml = finalHtml.replace('</body>', `${spriteContainer}</body>`)
             }

@@ -49,7 +49,7 @@ export function filterCssToMap(
     // @media-wrapped selectors
     if (selector.startsWith('@media|')) {
       const parts = selector.split('|')
-      const atRule = parts[1] ?? ''
+      const _atRule = parts[1] ?? ''
       const innerSel = parts.slice(2).join('|')
       if (innerSel && selectorMatches(innerSel, effectiveUsed)) {
         // We use a combined key for media rules to allow subtraction

@@ -8,6 +8,7 @@
 
 interface NuxtLiteState {
   page: string
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [key: string]: any
 }
 
@@ -35,9 +36,12 @@ interface PagePayload {
 (function () {
   'use strict'
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   if ((window as any).__NUXT_LITE_RUNNING__) return
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ;(window as any).__NUXT_LITE_RUNNING__ = true
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const subs = new Map<string, Set<(v: any, o: any) => void>>()
   let transitionMs: number = 0
   let navigating = false
@@ -47,6 +51,7 @@ interface PagePayload {
   // ===== Reactive System =====
   function createReactive<T extends object>(obj: T): T {
     return new Proxy(obj, {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       set(t: any, p: string, v: any) {
         const o = t[p]
         t[p] = v
@@ -59,6 +64,7 @@ interface PagePayload {
     })
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function on(prop: string, fn: (v: any, o: any) => void) {
     if (!subs.has(prop)) subs.set(prop, new Set())
     subs.get(prop)!.add(fn)
@@ -66,7 +72,9 @@ interface PagePayload {
   }
 
   const state = createReactive<NuxtLiteState>({ page: currentRoute })
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ;(window as any).__NUXT_LITE_STATE__ = state
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ;(window as any).__NuxtLite = { reactive: createReactive, on }
 
   // ===== Helpers =====
@@ -82,7 +90,7 @@ interface PagePayload {
     if (!href || href[0] !== '/') return false
     if (href.startsWith('/_nuxt') || href.startsWith('/__')) return false
     // Skip common file extensions
-    if (/\.(pdf|jpg|jpeg|png|gif|webp|svg|mp4|webm|mp3|ogg|zip|gz|css|js)(\?.*)?$/i.test(href)) return false
+    if (/\.(?:pdf|jpg|jpeg|png|gif|webp|svg|mp4|webm|mp3|ogg|zip|gz|css|js)(?:\?.*)?$/i.test(href)) return false
     return true
   }
 
@@ -187,6 +195,7 @@ interface PagePayload {
     if (!sprite) {
       const s = document.createElementNS(SVG_NS, 'svg')
       s.id = '__NUXT_LITE_SPRITE__'
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ;(s as any).style.display = 'none'
       document.body.appendChild(s)
       sprite = s
@@ -317,6 +326,7 @@ interface PagePayload {
       await new Promise(r => setTimeout(r, ms))
       el.classList.remove('page-enter-active', 'page-enter-to')
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       window.scrollTo({ top: 0, behavior: 'instant' as any })
     }
     catch (err) {
@@ -357,10 +367,10 @@ interface PagePayload {
       if (href.includes('#')) return
 
       const route = normalizeHref(href)
-      
+
       // Skip current page
       if (route === currentRoute) return
-      
+
       // Skip if already prefetched
       if (prefetchCache.has(route)) return
 

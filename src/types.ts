@@ -295,6 +295,7 @@ export function resolveColorConfig(options: ModuleOptions): { enabled: boolean, 
 export function findOutputDir(nuxt: Nuxt): string | null {
   const candidates = [
     nuxt.options.rootDir && join(nuxt.options.rootDir, 'dist'),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (nuxt.options as any).nitro?.output?.dir,
     '.output/public',
   ]

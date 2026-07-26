@@ -20,7 +20,7 @@ import type { ColorModeOptions } from '../types'
  * without causing long tasks on the main thread.
  */
 export function generateColorModeScript(options: ColorModeOptions): string {
-  const { preference, fallback, storageKey, classSuffix } = options
+  const { preference, storageKey, classSuffix } = options
 
   // Script minimalista e robusto
   // Usamos aspas simples e evitamos dependências externas

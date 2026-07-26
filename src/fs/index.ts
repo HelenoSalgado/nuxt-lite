@@ -123,15 +123,21 @@ export function pruneNuxtArtifacts(outputDir: string): string[] {
 
       // A) Nuxt content dumps & specific root artifacts
       if (entry.startsWith('dump.') && entry.endsWith('.sql')) {
-        unlinkSync(full); removed.push(rel); continue
+        unlinkSync(full)
+        removed.push(rel)
+        continue
       }
       if (entry === 'nitro.json' || (entry === 'manifest.json' && dir === outputDir)) {
-        unlinkSync(full); removed.push(rel); continue
+        unlinkSync(full)
+        removed.push(rel)
+        continue
       }
 
       // B) Compressed files (.gz, .br) - Global removal
       if (entry.endsWith('.gz') || entry.endsWith('.br')) {
-        unlinkSync(full); removed.push(rel); continue
+        unlinkSync(full)
+        removed.push(rel)
+        continue
       }
 
       // C) JavaScript & Source Maps (usually in _nuxt but could be elsewhere)
@@ -139,12 +145,16 @@ export function pruneNuxtArtifacts(outputDir: string): string[] {
         // Keep our own runtime!
         if (entry === 'lite.js' || entry === 'lite.min.js') continue
 
-        unlinkSync(full); removed.push(rel); continue
+        unlinkSync(full)
+        removed.push(rel)
+        continue
       }
 
       // D) Redundant CSS (original Nuxt CSS in _nuxt)
       if (entry.endsWith('.css') && dir.includes('_nuxt')) {
-        unlinkSync(full); removed.push(rel); continue
+        unlinkSync(full)
+        removed.push(rel)
+        continue
       }
     }
   }

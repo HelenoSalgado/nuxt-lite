@@ -1,4 +1,5 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, unicorn/no-new-array */
+/* eslint-disable unicorn/no-new-array */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * devalue-parse.ts — Parser compatible with Nuxt 4 serialization format
  *
