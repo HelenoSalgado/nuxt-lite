@@ -266,7 +266,7 @@ interface PagePayload {
   async function navigate(href: string, updateHistory: boolean = true) {
     if (navigating) return
     const route = normalizeHref(href)
-    if (route === currentRoute && updateHistory) return
+    if (route === currentRoute) return
 
     navigating = true
     const el = document.querySelector('[data-page-content]') || document.querySelector('main')
