@@ -1,10 +1,10 @@
 {
   "name": "nuxt-lite",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "Static site generation with custom lightweight hydration for Nuxt",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/orarelabutar/nuxt-lite.git"
+    "url": "git+https://github.com/HelenoSalgado/nuxt-lite.git"
   },
   "license": "MIT",
   "keywords": [
