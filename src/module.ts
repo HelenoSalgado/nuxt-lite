@@ -184,19 +184,22 @@ export default defineNuxtModule<ModuleOptions>({
       let runtimeSrc: string = 'console.warn("[nuxt-lite] Runtime not found")'
       const pathsToTry = [
         '../runtime/lite.min.js', // Quando compilado para dist/shared/
-        './runtime/lite.min.js',  // Quando em dist/ ou src/
-        '../dist/runtime/lite.min.js' // Quando rodando via stub do src/
+        './runtime/lite.min.js', // Quando em dist/ ou src/
+        '../dist/runtime/lite.min.js', // Quando rodando via stub do src/
       ]
 
       for (const p of pathsToTry) {
         try {
           runtimeSrc = readFileSync(resolver.resolve(p), 'utf-8')
           break
-        } catch {}
+        }
+        catch {
+          // ignore
+        }
       }
-      
+
       if (runtimeSrc.includes('console.warn')) {
-         console.error('[nuxt-lite] Erro fatal: Runtime não encontrado. O esbuild rodou?')
+        console.error('[nuxt-lite] Erro fatal: Runtime não encontrado. O esbuild rodou?')
       }
       writeFileSync(runtimePath, runtimeSrc, 'utf-8')
 
