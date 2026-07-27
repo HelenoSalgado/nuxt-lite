@@ -59,10 +59,10 @@ export default defineNuxtModule<ModuleOptions>({
     }
 
     if (nuxt.options.dev) return
-
     const globalUsedSelectors = new Set<string>()
     const dataVMapping = new Map<string, string>()
     const routeSymbols = new Map<string, string[]>()
+    const globalInlineCss = { content: '' }
     const pageManifest: Record<string, { meta: Record<string, string>, domSize: number }> = {}
     const seoReports = new Map<string, import('./seo/types').SeoReport>()
 
@@ -82,8 +82,9 @@ export default defineNuxtModule<ModuleOptions>({
         let html = route.contents as string
 
         // 1. Process Page (Clean, Inject Runtime script tag, etc.)
-        const { html: processedHtml, usedSelectors, symbols } = processPageContent(html, extendedOptions, '')
+        const { html: processedHtml, usedSelectors, symbols, inlineCss } = processPageContent(html, extendedOptions, '')
         html = processedHtml
+        if (inlineCss) globalInlineCss.content += inlineCss + ' '
 
         // Store symbols for payload later
         if (symbols && symbols.size > 0) {
@@ -204,7 +205,7 @@ export default defineNuxtModule<ModuleOptions>({
       // 2. CSS Optimization & Page Processing
       if (options.optimizeCss || options.cleanHtml) {
         const allCss = collectAllCssFiles(outputDir)
-        let combined = ''
+        let combined = globalInlineCss.content
         for (const [, content] of allCss) combined += content + ' '
         const rules = parseCssRules(combined)
 
@@ -241,6 +242,19 @@ export default defineNuxtModule<ModuleOptions>({
         const { extractSlotContent, extractMetaTags } = await import('./html/serialize')
         const { filterCssToMap, rulesMapToCss } = await import('./css/filter')
 
+        const globalLayoutSelectors = new Set<string>()
+        if (options.optimizeCss) {
+          for (const htmlPath of htmlFiles) {
+            const html = readFileSync(htmlPath, 'utf-8')
+            const { document } = parseHTML(html)
+            if (options.cleanHtml) {
+              stripDataVAttributes(document, dataVMapping)
+            }
+            const layoutSelectors = extractUsedSelectors(document.toString(), options.safelist, '[data-page-content], main')
+            layoutSelectors.forEach(s => globalLayoutSelectors.add(s))
+          }
+        }
+
         for (const htmlPath of htmlFiles) {
           const html = readFileSync(htmlPath, 'utf-8')
           const { document } = parseHTML(html)
@@ -256,7 +270,7 @@ export default defineNuxtModule<ModuleOptions>({
 
           if (startIdx !== -1 && endIdx !== -1) {
             // B) Strip data-v (Short-hashing only for alive hashes) FIRST
-            if (options.cleanHtml) {
+            if (options.cleanHtml && options.optimizeCss) {
               stripDataVAttributes(document, dataVMapping)
             }
 
@@ -274,8 +288,7 @@ export default defineNuxtModule<ModuleOptions>({
             // C) CSS Extraction
             let dynamicCss = ''
             if (options.optimizeCss && rules.size > 0) {
-              const layoutSelectors = extractUsedSelectors(document.toString(), options.safelist, '[data-page-content], main')
-              const criticalRules = filterCssToMap(rules, layoutSelectors, dataVMapping)
+              const criticalRules = filterCssToMap(rules, globalLayoutSelectors, dataVMapping)
               const criticalCss = rulesMapToCss(criticalRules)
 
               if (criticalCss) {

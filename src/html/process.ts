@@ -29,6 +29,7 @@ export interface PageProcessResult {
   html: string
   usedSelectors: Set<string>
   symbols?: Map<string, SvgSymbol>
+  inlineCss?: string
 }
 
 // ============================================================================
@@ -50,8 +51,13 @@ export function processPageContent(
   // 1. Extract used selectors BEFORE stripping CSS/Scripts to be safe
   const usedSelectors = extractUsedSelectors(html, safelist)
 
+  let inlineCss = ''
   // 2. CSS optimization
   if (optimizeCss) {
+    const styles = document.querySelectorAll('style')
+    styles.forEach((s) => {
+      if (s.textContent) inlineCss += s.textContent + ' '
+    })
     stripExistingCss(document)
   }
 
@@ -89,6 +95,7 @@ export function processPageContent(
     html: finalHtml,
     usedSelectors,
     symbols: pageSymbols,
+    inlineCss,
   }
 }
 

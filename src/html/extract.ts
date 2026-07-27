@@ -32,18 +32,16 @@ export function extractUsedSelectors(
 
   const { document } = parseHTML(html)
 
-  // If excluding, we clone or modify to avoid affecting the original logic
-  // but for extraction we can just avoid visiting those branches.
-  const excludeEl = excludeSelector ? document.querySelector(excludeSelector) : null
-
   const allElements = document.querySelectorAll('*')
 
-  allElements.forEach((el: Element) => {
+  for (const el of Array.from(allElements)) {
     // Check if this element is inside the excluded area
-    if (excludeEl && excludeEl.contains(el)) {
+    if (excludeSelector && el.closest && el.closest(excludeSelector)) {
       // Still add the tag name of the excluded container itself, but skip its children
-      if (el === excludeEl) used.add(el.tagName.toLowerCase())
-      return
+      if (el.matches && el.matches(excludeSelector)) {
+        used.add(el.tagName.toLowerCase())
+      }
+      continue
     }
 
     // Tag name
@@ -65,7 +63,7 @@ export function extractUsedSelectors(
         used.add(attr.name)
       }
     }
-  })
+  }
 
   return used
 }
