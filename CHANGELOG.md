@@ -1,6 +1,24 @@
 # Changelog
 
 
+## v0.0.8
+
+[compare changes](https://github.com/HelenoSalgado/nuxt-lite/compare/v0.0.6...v0.0.8)
+
+### 🩹 Fixes
+
+- Robust runtime script path resolution for built and stub contexts ([bb0f557](https://github.com/HelenoSalgado/nuxt-lite/commit/bb0f557))
+- **css:** Prevent dynamic page CSS leakage into global Critical CSS and disable destructive bundler tree-shaking ([9ff55c5](https://github.com/HelenoSalgado/nuxt-lite/commit/9ff55c5))
+
+### 🏡 Chore
+
+- **release:** V0.0.6 ([bbbee79](https://github.com/HelenoSalgado/nuxt-lite/commit/bbbee79))
+- **release:** V0.0.7 ([c4c736f](https://github.com/HelenoSalgado/nuxt-lite/commit/c4c736f))
+
+### ❤️ Contributors
+
+- Heleno Salgado <helenosalgado19@gmail.com>
+
 ## v0.0.7
 
 [compare changes](https://github.com/HelenoSalgado/nuxt-lite/compare/v0.0.6...v0.0.7)
