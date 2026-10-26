@@ -1,6 +1,22 @@
 # Changelog
 
 
+## v0.0.9
+
+[compare changes](https://github.com/HelenoSalgado/nuxt-lite/compare/v0.0.8...v0.0.9)
+
+### 🩹 Fixes
+
+- Transporte de páginas com reconhecimento de layout. ([c0af3a5](https://github.com/HelenoSalgado/nuxt-lite/commit/c0af3a5))
+
+### 🎨 Styles
+
+- **module:** Fix stylistic linting rules (trailing comma, multi-spaces, brace-style) ([55d6b53](https://github.com/HelenoSalgado/nuxt-lite/commit/55d6b53))
+
+### ❤️ Contributors
+
+- Heleno Salgado <helenosalgado19@gmail.com>
+
 ## v0.0.8
 
 [compare changes](https://github.com/HelenoSalgado/nuxt-lite/compare/v0.0.6...v0.0.8)

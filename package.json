@@ -1,27 +1,16 @@
 {
   "name": "nuxt-lite",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "description": "Static site generation with custom lightweight hydration for Nuxt",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/HelenoSalgado/nuxt-lite.git"
-  },
-  "license": "MIT",
-  "keywords": [
-    "nuxt",
-    "nuxt-module",
-    "static-site-generation",
-    "ssg",
-    "vue"
-  ],
   "type": "module",
+  "main": "./dist/module.mjs",
+  "types": "./dist/types.d.mts",
   "exports": {
     ".": {
       "types": "./dist/types.d.mts",
       "import": "./dist/module.mjs"
     }
   },
-  "main": "./dist/module.mjs",
   "typesVersions": {
     "*": {
       ".": [
@@ -30,22 +19,53 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "LICENSE"
   ],
   "workspaces": [
     "playground"
   ],
   "scripts": {
-    "prepack": "nuxt-module-build build && npm run build:runtime",
     "dev": "npm run dev:prepare && nuxt dev playground",
     "dev:build": "nuxt build playground",
     "dev:prepare": "npm run build:runtime && nuxt-module-build build --stub && nuxt-module-build prepare && nuxt prepare playground",
+    "clean": "rm -rf dist",
     "build:runtime": "esbuild src/runtime/lite.ts --bundle --minify --outfile=dist/runtime/lite.min.js --format=iife",
-    "release": "npm run lint && npm run test && npm run prepack && changelogen --release && npm publish && git push --follow-tags",
+    "build": "npm run clean && nuxt-module-build build && npm run build:runtime",
+    "prepack": "npm run build",
     "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "test": "vitest run",
     "test:watch": "vitest watch",
-    "test:types": "vue-tsc --noEmit && cd playground && vue-tsc --noEmit"
+    "test:types": "vue-tsc --noEmit && cd playground && vue-tsc --noEmit",
+    "prepublishOnly": "npm run lint && npm run test && npm run test:types && npm run prepack",
+    "release": "npm run prepublishOnly && changelogen --release && npm publish && git push --follow-tags"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HelenoSalgado/nuxt-lite.git"
+  },
+  "keywords": [
+    "nuxt",
+    "nuxt-module",
+    "static-site-generation",
+    "ssg",
+    "vue",
+    "lightweight",
+    "hydration",
+    "performance",
+    "spa-navigation",
+    "seo"
+  ],
+  "author": "Heleno Salgado",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/HelenoSalgado/nuxt-lite/issues"
+  },
+  "homepage": "https://github.com/HelenoSalgado/nuxt-lite#readme",
+  "engines": {
+    "node": ">=18.20.0"
   },
   "dependencies": {
     "@nuxt/kit": "^4.4.2",
@@ -59,6 +79,7 @@
     "@nuxt/module-builder": "^1.0.2",
     "@nuxt/schema": "^4.4.2",
     "@nuxt/test-utils": "^4.0.0",
+    "@types/node": "^26.6.5",
     "changelogen": "^0.6.2",
     "eslint": "^10.2.0",
     "nuxt": "^4.4.2",
