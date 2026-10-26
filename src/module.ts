@@ -321,11 +321,30 @@ export default defineNuxtModule<ModuleOptions>({
               }
             }
 
+            const mainEl = document.querySelector('main')
+            const mainAttrs: Record<string, string> = {}
+            if (mainEl) {
+              for (let i = 0; i < mainEl.attributes.length; i++) {
+                const attr = mainEl.attributes[i]
+                if (attr) mainAttrs[attr.name] = attr.value
+              }
+            }
+
+            const layoutAttrs: Record<string, string> = {}
+            if (mainEl && mainEl.parentElement && mainEl.parentElement.tagName.toLowerCase() !== 'body') {
+              for (let i = 0; i < mainEl.parentElement.attributes.length; i++) {
+                const attr = mainEl.parentElement.attributes[i]
+                if (attr) layoutAttrs[attr.name] = attr.value
+              }
+            }
+
             const payload = {
               dom: extractSlotContent(slotHtml),
               meta: extractMetaTags(html),
               symbols,
               css: dynamicCss || undefined,
+              mainAttrs: Object.keys(mainAttrs).length > 0 ? mainAttrs : undefined,
+              layoutAttrs: Object.keys(layoutAttrs).length > 0 ? layoutAttrs : undefined,
             }
 
             let payloadPath: string

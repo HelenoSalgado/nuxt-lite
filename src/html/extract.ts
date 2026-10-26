@@ -37,9 +37,12 @@ export function extractUsedSelectors(
   for (const el of Array.from(allElements)) {
     // Check if this element is inside the excluded area
     if (excludeSelector && el.closest && el.closest(excludeSelector)) {
-      // Still add the tag name of the excluded container itself, but skip its children
+      // Still add the tag name and classes of the excluded container itself, but skip its children
       if (el.matches && el.matches(excludeSelector)) {
         used.add(el.tagName.toLowerCase())
+        if (el.classList && el.classList.length > 0) {
+          el.classList.forEach((cls: string) => used.add(cls))
+        }
       }
       continue
     }

@@ -31,6 +31,8 @@ interface PagePayload {
   }
   symbols?: { id: string, content: string, attributes: string }[]
   css?: string
+  mainAttrs?: Record<string, string>
+  layoutAttrs?: Record<string, string>
 }
 
 (function () {
@@ -229,6 +231,32 @@ interface PagePayload {
         document.head.appendChild(dynamicStyle)
       }
       dynamicStyle.textContent = payload.css
+    }
+
+    // Sync layout container attributes (e.g. class="layout-default" vs class="layout-portfolio")
+    if (el.parentElement && payload.layoutAttrs) {
+      for (const name in payload.layoutAttrs) {
+        el.parentElement.setAttribute(name, payload.layoutAttrs[name]!)
+      }
+    }
+
+    // Sync main attributes (e.g. class="main-default" vs class="main-portfolio")
+    if (payload.mainAttrs) {
+      const transitionClasses = ['page-leave-active', 'page-leave-to', 'page-enter-active', 'page-enter-from']
+      const activeTransitions = transitionClasses.filter(c => el.classList.contains(c))
+
+      for (let i = el.attributes.length - 1; i >= 0; i--) {
+        const attr = el.attributes[i]
+        if (attr && !(attr.name in payload.mainAttrs)) {
+          el.removeAttribute(attr.name)
+        }
+      }
+      for (const name in payload.mainAttrs) {
+        el.setAttribute(name, payload.mainAttrs[name]!)
+      }
+      for (const c of activeTransitions) {
+        el.classList.add(c)
+      }
     }
 
     // Update symbols first so <use> can find them

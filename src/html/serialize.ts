@@ -30,6 +30,10 @@ export interface PagePayload {
     og?: Record<string, string>
     twitter?: Record<string, string>
   }
+  symbols?: { id: string, content: string, attributes: string }[]
+  css?: string
+  mainAttrs?: Record<string, string>
+  layoutAttrs?: Record<string, string>
 }
 
 // ============================================================================
