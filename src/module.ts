@@ -216,8 +216,10 @@ export default defineNuxtModule<ModuleOptions>({
         dataVMapping.clear()
         const aliveHashes = new Set<string>()
         for (const selector of rules.keys()) {
-          const match = selector.match(/\[data-v-([a-z0-9]+)\]/i)
-          if (match) aliveHashes.add(match[1])
+          const matches = selector.matchAll(/\[data-v-([a-z0-9]+)\]/gi)
+          for (const match of matches) {
+            aliveHashes.add(match[1])
+          }
         }
         let hashIdx = 1
         aliveHashes.forEach(h => dataVMapping.set(h, `s${hashIdx++}`))

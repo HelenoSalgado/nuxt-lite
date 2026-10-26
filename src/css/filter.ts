@@ -39,7 +39,7 @@ export function filterCssToMap(
     if (dataVMapping && dataVMapping.size > 0) {
       for (const [hash, short] of dataVMapping) {
         const attrSelector = `[data-v-${hash}]`
-        if (selector.includes(attrSelector)) {
+        if (selector.includes(attrSelector) || block.includes(attrSelector)) {
           selector = selector.split(attrSelector).join(`.${short}`)
           block = block.split(attrSelector).join(`.${short}`)
         }

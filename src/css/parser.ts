@@ -6,6 +6,11 @@
  */
 
 // ============================================================================
+// External dependencies
+// ============================================================================
+import { transformSync } from 'esbuild'
+
+// ============================================================================
 // Local imports
 // ============================================================================
 import { CSS_COMMENT_RE, CSS_WS_RE, SKIP_AT_RULE_RE } from '../types'
@@ -23,9 +28,24 @@ export function parseCssRules(css: string): Map<string, string> {
   const rules = new Map<string, string>()
   const seenAtRules = new Set<string>()
 
+  // Unnest CSS rules using esbuild targeting chrome90 to flatten native nesting
+  let unnestedCss = css
+  try {
+    const res = transformSync(css, {
+      loader: 'css',
+      target: 'chrome90',
+      minify: false,
+    })
+    unnestedCss = res.code
+  }
+  catch {
+    // If esbuild fails to parse (e.g. non-standard syntax), fall back to raw css
+    unnestedCss = css
+  }
+
   // Normalize URLs: convert relative paths to absolute paths
   // Matches url("fonts/...") or url("../fonts/...") but ignores data:, http://, and already absolute paths /
-  const clean = css
+  const clean = unnestedCss
     .replace(/url\(['"]?([^'"]+)['"]?\)/g, (match, url) => {
       if (url.startsWith('data:') || url.startsWith('http') || url.startsWith('/')) {
         return match
