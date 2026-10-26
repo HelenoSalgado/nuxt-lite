@@ -63,7 +63,11 @@ export function parseCssRules(css: string): Map<string, string> {
     const block = clean.slice(braceStart, j).trim()
 
     if (selector.startsWith('@')) {
-      if (!seenAtRules.has(selector)) {
+      if (selector === '@font-face') {
+        const fontKey = `@font-face-${rules.size}`
+        rules.set(fontKey, selector + ' ' + block)
+      }
+      else if (!seenAtRules.has(selector)) {
         seenAtRules.add(selector)
         rules.set(selector, selector + ' ' + block)
       }

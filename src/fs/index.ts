@@ -80,7 +80,7 @@ export function pruneNuxtArtifacts(outputDir: string): string[] {
   const removed: string[] = []
 
   // 1. Cleanup specific directories
-  const dirsToPrune = ['_nuxt/builds', '__nuxt_content']
+  const dirsToPrune = ['_nuxt/builds', 'nuxt/builds', '__nuxt_content']
   for (const d of dirsToPrune) {
     const full = join(outputDir, d)
     if (existsSync(full)) {
@@ -101,6 +101,16 @@ export function pruneNuxtArtifacts(outputDir: string): string[] {
       const full = join(dir, entry)
       const st = statSync(full)
       const rel = relative(outputDir, full)
+
+      // Preserve Cloudflare Pages essential deployment files
+      if (
+        entry.startsWith('_worker') ||
+        entry === '_routes.json' ||
+        entry === '_headers' ||
+        entry === '_redirects'
+      ) {
+        continue
+      }
 
       if (st.isDirectory()) {
         // Skip directories to preserve assets, sitemap styles and manual scripts
@@ -140,18 +150,18 @@ export function pruneNuxtArtifacts(outputDir: string): string[] {
         continue
       }
 
-      // C) JavaScript & Source Maps (usually in _nuxt but could be elsewhere)
+      // C) JavaScript & Source Maps (usually in _nuxt or nuxt but could be elsewhere)
       if (entry.endsWith('.js') || entry.endsWith('.js.map')) {
-        // Keep our own runtime!
-        if (entry === 'lite.js' || entry === 'lite.min.js') continue
+        // Keep our own runtime and Cloudflare worker!
+        if (entry === 'lite.js' || entry === 'lite.min.js' || entry.startsWith('_worker')) continue
 
         unlinkSync(full)
         removed.push(rel)
         continue
       }
 
-      // D) Redundant CSS (original Nuxt CSS in _nuxt)
-      if (entry.endsWith('.css') && dir.includes('_nuxt')) {
+      // D) Redundant CSS (original Nuxt CSS in _nuxt or nuxt)
+      if (entry.endsWith('.css') && (dir.includes('_nuxt') || dir.endsWith('/nuxt') || dir.includes('/nuxt/'))) {
         unlinkSync(full)
         removed.push(rel)
         continue

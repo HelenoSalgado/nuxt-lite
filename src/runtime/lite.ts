@@ -328,6 +328,7 @@ interface PagePayload {
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       window.scrollTo({ top: 0, behavior: 'instant' as any })
+      document.dispatchEvent(new CustomEvent('nuxt-lite:navigate', { detail: { route } }))
     }
     catch (err) {
       console.error('[nuxt-lite] navigate error:', err)
